@@ -51,7 +51,9 @@ class Gaussian1DModel(ObservationModel):
         return like
 
     def like_new_root(self, x: float | np.ndarray) -> float:
-        like: float = norm.pdf(x, loc=self.mu_phi, scale=np.sqrt(self.sigma_phi**2 + self.sigma_x**2))
+        like: float = norm.pdf(
+            x, loc=self.mu_phi, scale=np.sqrt(self.sigma_phi**2 + self.sigma_x**2)
+        )
         return like
 
     def sample_root_atom(self, x_obs: float | np.ndarray) -> float:
@@ -98,7 +100,9 @@ class Gaussian2DModel(ObservationModel):
         return like
 
     def like_new_root(self, x: float | np.ndarray) -> float:
-        like: float = multivariate_normal.pdf(x, mean=self.mu_phi, cov=self.Sigma_phi + self.Sigma_x)
+        like: float = multivariate_normal.pdf(
+            x, mean=self.mu_phi, cov=self.Sigma_phi + self.Sigma_x
+        )
         return like
 
     def sample_root_atom(self, x_obs: float | np.ndarray) -> np.ndarray:
