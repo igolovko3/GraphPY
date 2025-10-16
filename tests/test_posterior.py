@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from gpy.types import Nodes
-from gpy.sampler.sampler1d import GPYSampler1D
+from gpy.sampler.samplers import GPYSampler1D
 from gpy.posterior.posterior import compute_posterior_predictive
 
 def tiny_run():
