@@ -1,5 +1,6 @@
 /venv/
 /src/gpy.egg-info/
+/src/__pycache__/
 /src/gpy/clustering/__pycache__/
 /src/gpy/posterior/__pycache__/
 /src/gpy/sampler/__pycache__/
