@@ -62,12 +62,12 @@ def VI_lb(cls: np.ndarray, psm: np.ndarray) -> np.ndarray:
     def VI_lb_compute(c: np.ndarray) -> float:
         f = 0.0
         for i in range(n):
-            ind = (c == c[i])
+            ind = c == c[i]
             f += (
-                         np.log2(np.sum(ind))
-                         + np.log2(np.sum(psm[i, :]))
-                         - 2 * np.log2(np.sum(ind * psm[i, :]))
-                 ) / n
+                np.log2(np.sum(ind))
+                + np.log2(np.sum(psm[i, :]))
+                - 2 * np.log2(np.sum(ind * psm[i, :]))
+            ) / n
         return float(f)
 
     output = np.apply_along_axis(VI_lb_compute, 1, cls)
@@ -75,11 +75,11 @@ def VI_lb(cls: np.ndarray, psm: np.ndarray) -> np.ndarray:
 
 
 def minVI(
-        psm: np.ndarray,
-        max_k: int | None = None,
-        start_cl: np.ndarray | None = None,
-        maxiter: int | None = None,
-        suppress_comment: bool = True
+    psm: np.ndarray,
+    max_k: int | None = None,
+    start_cl: np.ndarray | None = None,
+    maxiter: int | None = None,
+    suppress_comment: bool = True,
 ) -> dict[str, Any]:
     """
     Choose an “average” partition by minimizing the VI lower bound over

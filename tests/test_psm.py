@@ -7,9 +7,7 @@ def test_psm_and_minvi_shapes():
     # Build synthetic partitions: 12 partitions of 8 items with 3–4 clusters each
     rng = np.random.default_rng(123)
     n_part, n = 12, 8
-    cls = np.vstack([
-        rng.integers(0, rng.integers(3, 5), size=n) for _ in range(n_part)
-    ])
+    cls = np.vstack([rng.integers(0, rng.integers(3, 5), size=n) for _ in range(n_part)])
     psm = comp_psm(cls)
     assert psm.shape == (n, n)
     # symmetry + diag ones

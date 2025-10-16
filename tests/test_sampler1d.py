@@ -20,9 +20,15 @@ def small_tree_and_data():
 def test_sampler_smoke():
     nodes, x = small_tree_and_data()
     res = GPYSampler1D(
-        nodes, x,
-        n_iter=30, burn_in=10, sigma=0.0,  # small, fast
-        mu_phi=0.0, sigma_phi=5.0, a_0=1.0, b_0=1.0,
+        nodes,
+        x,
+        n_iter=30,
+        burn_in=10,
+        sigma=0.0,  # small, fast
+        mu_phi=0.0,
+        sigma_phi=5.0,
+        a_0=1.0,
+        b_0=1.0,
         group_init_mode="diffuse",
         progress=False,
     )

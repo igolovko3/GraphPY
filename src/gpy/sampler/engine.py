@@ -25,6 +25,7 @@ from gpy.types import (
 
 # ---------------- helpers ----------------
 
+
 def initialize_groups(nodes: Nodes, x: XData, group_init_mode: str = "diffuse") -> Groups:
     groups_: Groups = {}
     n_tables_in_node: dict[NodeId, int] = {}
@@ -38,9 +39,14 @@ def initialize_groups(nodes: Nodes, x: XData, group_init_mode: str = "diffuse") 
         path_to_root = path_to_root[::-1]
         for _ in range(n_obs):
             for node_in_path in path_to_root:
-                n_tables_in_node[node_in_path] = n_tables_in_node.get(node_in_path, 0) \
-                        + int(group_init_mode == "diffuse")
-            groups_[node].append(tuple((l, n_tables_in_node[l]) for l in path_to_root))
+                n_tables_in_node[node_in_path] = n_tables_in_node.get(node_in_path, 0) + int(
+                    group_init_mode == "diffuse"
+                )
+            groups_[node].append(
+                tuple(
+                    (node_in_path, n_tables_in_node[node_in_path]) for node_in_path in path_to_root
+                )
+            )
     return groups_
 
 
@@ -48,34 +54,36 @@ def get_tables_from_children(node: NodeId, nodes: Nodes, groups: Groups) -> list
     desc = nodes[node]["desc"]
     lvl = nodes[node]["lvl"]
     tables_from_children = set(
-        itertools.chain(
-            *[[g[: lvl + 2] for g in groups[i] if g[lvl][0] == node] for i in desc]
-        )
+        itertools.chain(*[[g[: lvl + 2] for g in groups[i] if g[lvl][0] == node] for i in desc])
     )
     return list(tables_from_children)
 
 
 def get_samples(
-        node: NodeId, nodes: Nodes, groups: Groups, not_i: int | None = None
+    node: NodeId, nodes: Nodes, groups: Groups, not_i: int | None = None
 ) -> list[TableLabel]:
     lvl = nodes[node]["lvl"]
     tables_from_children = get_tables_from_children(node, nodes, groups)
     if not_i is None:
         return [g[lvl][1] for g in groups[node] + tables_from_children]
     return [
-        g[lvl][1]
-        for g in groups[node][:not_i] + groups[node][not_i + 1:] + tables_from_children
+        g[lvl][1] for g in groups[node][:not_i] + groups[node][not_i + 1 :] + tables_from_children
     ]
 
 
 # ---------------- likelihood / sampling that use the model ----------------
 
+
 def likelihood_observation(
     node: NodeId,
     x_obs: Any,
     *,
-    nodes: Nodes, groups: Groups, alpha: Alpha, sigma: float,
-    atoms: Atoms, tables_to_atoms: TablesToAtoms,
+    nodes: Nodes,
+    groups: Groups,
+    alpha: Alpha,
+    sigma: float,
+    atoms: Atoms,
+    tables_to_atoms: TablesToAtoms,
     parents_weights: ParentsWeights,
     model: ObservationModel,
 ) -> tuple[float, list[float] | None]:
@@ -102,20 +110,33 @@ def likelihood_observation(
         parents = nodes[node]["par"]
         if len(parents) == 1:
             p_new *= likelihood_observation(
-                parents[0], x_obs,
-                nodes=nodes, groups=groups, alpha=alpha, sigma=sigma,
-                atoms=atoms, tables_to_atoms=tables_to_atoms,
-                parents_weights=parents_weights, model=model
+                parents[0],
+                x_obs,
+                nodes=nodes,
+                groups=groups,
+                alpha=alpha,
+                sigma=sigma,
+                atoms=atoms,
+                tables_to_atoms=tables_to_atoms,
+                parents_weights=parents_weights,
+                model=model,
             )[0]
         else:
             weights = parents_weights[node]
             likelihood_parents = [
                 likelihood_observation(
-                    p, x_obs,
-                    nodes=nodes, groups=groups, alpha=alpha, sigma=sigma,
-                    atoms=atoms, tables_to_atoms=tables_to_atoms,
-                    parents_weights=parents_weights, model=model
-                )[0] for p in parents
+                    p,
+                    x_obs,
+                    nodes=nodes,
+                    groups=groups,
+                    alpha=alpha,
+                    sigma=sigma,
+                    atoms=atoms,
+                    tables_to_atoms=tables_to_atoms,
+                    parents_weights=parents_weights,
+                    model=model,
+                )[0]
+                for p in parents
             ]
             p_new *= float(np.sum(np.array(weights) * np.array(likelihood_parents)))
 
@@ -123,16 +144,25 @@ def likelihood_observation(
 
 
 def sample_from_node(
-    node: NodeId, *,
-    i: int | None, x_obs: Any, cache: list[Path] | None,
-    nodes: Nodes, groups: Groups, alpha: Alpha, sigma: float,
-    atoms: Atoms, tables_to_atoms: TablesToAtoms,
-    parents_weights: ParentsWeights, tables_to_path: TablesToPath, x: XData,
-    model: ObservationModel
+    node: NodeId,
+    *,
+    i: int | None,
+    x_obs: Any,
+    cache: list[Path] | None,
+    nodes: Nodes,
+    groups: Groups,
+    alpha: Alpha,
+    sigma: float,
+    atoms: Atoms,
+    tables_to_atoms: TablesToAtoms,
+    parents_weights: ParentsWeights,
+    tables_to_path: TablesToPath,
+    x: XData,
+    model: ObservationModel,
 ) -> Path:
     assert not (i is None and x_obs is None)
     if x_obs is None:
-        x_obs = x[node][i]  # type: ignore[index]
+        x_obs = x[node][i]
     if cache is None:
         cache = []
 
@@ -151,10 +181,16 @@ def sample_from_node(
         p_old[t] *= float(model.like_existing(np.asarray([x_obs]).ravel(), atoms[at_label]))
 
     likelihood_new, likelihood_parents = likelihood_observation(
-        node, x_obs,
-        nodes=nodes, groups=groups, alpha=alpha, sigma=sigma,
-        atoms=atoms, tables_to_atoms=tables_to_atoms,
-        parents_weights=parents_weights, model=model
+        node,
+        x_obs,
+        nodes=nodes,
+        groups=groups,
+        alpha=alpha,
+        sigma=sigma,
+        atoms=atoms,
+        tables_to_atoms=tables_to_atoms,
+        parents_weights=parents_weights,
+        model=model,
     )
     p_new *= float(likelihood_new)
 
@@ -181,28 +217,37 @@ def sample_from_node(
                 p_par = p_par / p_par.sum()
                 parent = str(np.random.choice(a=parents, p=p_par))
             sample_from_node(
-                parent, i=None, x_obs=x_obs, cache=cache,
-                nodes=nodes, groups=groups, alpha=alpha, sigma=sigma,
-                atoms=atoms, tables_to_atoms=tables_to_atoms,
-                parents_weights=parents_weights, tables_to_path=tables_to_path, x=x,
-                model=model
+                parent,
+                i=None,
+                x_obs=x_obs,
+                cache=cache,
+                nodes=nodes,
+                groups=groups,
+                alpha=alpha,
+                sigma=sigma,
+                atoms=atoms,
+                tables_to_atoms=tables_to_atoms,
+                parents_weights=parents_weights,
+                tables_to_path=tables_to_path,
+                x=x,
+                model=model,
             )
 
     return tuple(itertools.chain(*cache[::-1]))
 
 
 def update_parent_weights(
-        parents_weights: ParentsWeights, groups: Groups, alpha: Alpha, nodes: Nodes
+    parents_weights: ParentsWeights, groups: Groups, alpha: Alpha, nodes: Nodes
 ) -> None:
     for node in list(parents_weights.keys()):
         tables_by_parents = [g[-2][0] for g in set(groups[node])]
         counts = dict(zip(*np.unique(tables_by_parents, return_counts=True), strict=True))
-        weights = np.array([alpha[parent] + counts.get(parent, 0) for parent in nodes[node]['par']])
+        weights = np.array([alpha[parent] + counts.get(parent, 0) for parent in nodes[node]["par"]])
         parents_weights[node] = list(dirichlet.rvs(weights)[0])
 
 
 def update_concentration(
-        nodes: Nodes, groups: Groups, alpha: Alpha, a_0: float, b_0: float, sigma: float
+    nodes: Nodes, groups: Groups, alpha: Alpha, a_0: float, b_0: float, sigma: float
 ) -> None:
     for node in nodes:
         samples = get_samples(node, nodes, groups)
@@ -213,6 +258,7 @@ def update_concentration(
         loc, scale = alpha_curr, alpha_curr
         a, b = (a_trunc - loc) / scale, (b_trunc - loc) / scale
         from scipy.stats import truncnorm
+
         alpha_prop = float(truncnorm.rvs(a, b, loc=loc, scale=scale))
         a_rev, b_rev = (0.0 - alpha_prop) / alpha_prop, (2.0 * alpha_prop - alpha_prop) / alpha_prop
         p_prop = float(truncnorm.pdf(alpha_prop, a=a, b=b, loc=loc, scale=scale))
@@ -220,18 +266,21 @@ def update_concentration(
 
         mh_ratio = (
             (alpha_prop / alpha_curr) ** a_0
-            * np.exp(- b_0 * (alpha_prop - alpha_curr))
-            * poch(alpha_curr + 1, n_samples - 1) / poch(alpha_prop + 1, n_samples - 1)
-            * np.prod([
-                (alpha_prop + sigma * i) / (alpha_curr + sigma * i) for i in range(1, n_tables)
-            ])
-            * p_rev / p_prop
+            * np.exp(-b_0 * (alpha_prop - alpha_curr))
+            * poch(alpha_curr + 1, n_samples - 1)
+            / poch(alpha_prop + 1, n_samples - 1)
+            * np.prod(
+                [(alpha_prop + sigma * i) / (alpha_curr + sigma * i) for i in range(1, n_tables)]
+            )
+            * p_rev
+            / p_prop
         )
         if np.random.uniform() < min(1.0, float(mh_ratio)):
             alpha[node] = float(alpha_prop)
 
 
 # ---------------- main engine ----------------
+
 
 def run_sampler(
     *,
@@ -262,15 +311,16 @@ def run_sampler(
         "parents_weights": [],
         "concentration": [],
         # model maintains its own kernel params; store useful summaries if needed
-        "sigma_x": [],   # present for 1D parity; leave empty for 2D unless you add a getter
+        "sigma_x": [],  # present for 1D parity; leave empty for 2D unless you add a getter
     }
 
     # init
     groups = initialize_groups(nodes, x, group_init_mode)
     alpha: Alpha = {node: float(np.random.gamma(shape=a_0, scale=1 / b_0)) for node in nodes}
     parents_weights: ParentsWeights = {
-        node: list(dirichlet.rvs(np.ones(len(nodes[node]['par'])))[0])
-        for node in nodes if len(nodes[node]['par']) > 1
+        node: list(dirichlet.rvs(np.ones(len(nodes[node]["par"])))[0])
+        for node in nodes
+        if len(nodes[node]["par"]) > 1
     }
 
     # atoms & maps from initial groups
@@ -290,11 +340,20 @@ def run_sampler(
         for node in nodes:
             for i in range(n_obs[node]):
                 new_path = sample_from_node(
-                    node, i=i, x_obs=None, cache=None,
-                    nodes=nodes, groups=groups, alpha=alpha, sigma=sigma,
-                    atoms=atoms, tables_to_atoms=tables_to_atoms,
-                    parents_weights=parents_weights, tables_to_path=tables_to_path, x=x,
-                    model=model
+                    node,
+                    i=i,
+                    x_obs=None,
+                    cache=None,
+                    nodes=nodes,
+                    groups=groups,
+                    alpha=alpha,
+                    sigma=sigma,
+                    atoms=atoms,
+                    tables_to_atoms=tables_to_atoms,
+                    parents_weights=parents_weights,
+                    tables_to_path=tables_to_path,
+                    x=x,
+                    model=model,
                 )
                 # update maps
                 for lvl in range(len(new_path)):

@@ -20,12 +20,13 @@ def tiny_run():
     res = GPYSampler1D(nodes, x, n_iter=25, burn_in=10, progress=False)
     return nodes, x, res
 
+
 def test_posterior_predictive_basic():
     nodes, x, res = tiny_run()
     # choose a reasonably wide grid
     data_all = np.array([v for arr in x.values() for v in arr], dtype=float)
-    sigma_x = float(np.mean(res["history"]["sigma_x"][res["params"]["burn_in"]:] or [1.0]))
-    grid = np.linspace(data_all.min() - 5*sigma_x, data_all.max() + 5*sigma_x, 800)
+    sigma_x = float(np.mean(res["history"]["sigma_x"][res["params"]["burn_in"] :] or [1.0]))
+    grid = np.linspace(data_all.min() - 5 * sigma_x, data_all.max() + 5 * sigma_x, 800)
 
     f_post = compute_posterior_predictive(nodes, x, res, grid)
     # structure checks
