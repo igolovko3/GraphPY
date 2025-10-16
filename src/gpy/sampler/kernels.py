@@ -27,11 +27,15 @@ class ObservationModel(Protocol):
         pass
 
     # update all atoms in place given current assignments
-    def update_atoms(self, groups: Groups, x: XData, tables_to_atoms: TablesToAtoms, atoms: Atoms) -> None:
+    def update_atoms(
+            self, groups: Groups, x: XData, tables_to_atoms: TablesToAtoms, atoms: Atoms
+    ) -> None:
         pass
 
     # update kernel hyperparameters in place (e.g., sigma_x / Sigma_x)
-    def update_kernel(self, groups: Groups, x: XData, atoms: Atoms, tables_to_atoms: TablesToAtoms) -> None:
+    def update_kernel(
+            self, groups: Groups, x: XData, atoms: Atoms, tables_to_atoms: TablesToAtoms
+    ) -> None:
         pass
 
 
@@ -54,17 +58,25 @@ class Gaussian1DModel(ObservationModel):
         mean = (x_obs / self.sigma_x**2 + self.mu_phi / self.sigma_phi**2) * std**2
         return float(np.random.normal(mean, std))
 
-    def update_atoms(self, groups: Groups, x: XData, tables_to_atoms: TablesToAtoms, atoms: Atoms) -> None:
+    def update_atoms(
+            self, groups: Groups, x: XData, tables_to_atoms: TablesToAtoms, atoms: Atoms
+    ) -> None:
         all_tables = [obs for group in groups.values() for obs in group]
         all_data = [xi for arr in x.values() for xi in arr]
         curr_atoms = {tables_to_atoms[g[0]] for g in all_tables}
         for at in curr_atoms:
-            members = [all_data[i] for i in range(len(all_data)) if tables_to_atoms[all_tables[i][0]] == at]
+            members = [
+                all_data[i]
+                for i in range(len(all_data))
+                if tables_to_atoms[all_tables[i][0]] == at
+            ]
             std = 1.0 / np.sqrt(1.0 / self.sigma_phi**2 + len(members) / self.sigma_x**2)
             mean = (sum(members) / self.sigma_x**2 + self.mu_phi / self.sigma_phi**2) * std**2
             atoms[at] = float(np.random.normal(mean, std))
 
-    def update_kernel(self, groups: Groups, x: XData, atoms: Atoms, tables_to_atoms: TablesToAtoms) -> None:
+    def update_kernel(
+            self, groups: Groups, x: XData, atoms: Atoms, tables_to_atoms: TablesToAtoms
+    ) -> None:
         all_tables = [obs for group in groups.values() for obs in group]
         all_data = np.array([xi for arr in x.values() for xi in arr], dtype=float)
         all_atoms = np.array([atoms[tables_to_atoms[g[0]]] for g in all_tables], dtype=float)
@@ -93,20 +105,29 @@ class Gaussian2DModel(ObservationModel):
         mu_post = Sigma_post @ (self._Sigma_x_inv @ x_obs + self._Sigma_phi_inv @ self.mu_phi)
         return np.random.multivariate_normal(mu_post, Sigma_post)
 
-    def update_atoms(self, groups: Groups, x: XData, tables_to_atoms: TablesToAtoms, atoms: Atoms) -> None:
+    def update_atoms(
+            self, groups: Groups, x: XData, tables_to_atoms: TablesToAtoms, atoms: Atoms
+    ) -> None:
         all_tables = [obs for group in groups.values() for obs in group]
         all_data = [xi for arr in x.values() for xi in arr]  # each xi is (2,)
         curr_atoms = {tables_to_atoms[g[0]] for g in all_tables}
         for at in curr_atoms:
-            members = [np.asarray(all_data[i]) for i in range(len(all_data)) if tables_to_atoms[all_tables[i][0]] == at]
+            members = [
+                np.asarray(all_data[i])
+                for i in range(len(all_data))
+                if tables_to_atoms[all_tables[i][0]] == at
+            ]
             n = len(members)
             if n == 0:
                 continue
             Sigma_post = np.linalg.inv(self._Sigma_phi_inv + n * self._Sigma_x_inv)
-            mu_post = Sigma_post @ (self._Sigma_x_inv @ np.sum(members, axis=0) + self._Sigma_phi_inv @ self.mu_phi)
+            mu_post = Sigma_post @ (self._Sigma_x_inv @ np.sum(members, axis=0) \
+                                    + self._Sigma_phi_inv @ self.mu_phi)
             atoms[at] = np.random.multivariate_normal(mu_post, Sigma_post)
 
-    def update_kernel(self, groups: Groups, x: XData, atoms: Atoms, tables_to_atoms: TablesToAtoms) -> None:
+    def update_kernel(
+            self, groups: Groups, x: XData, atoms: Atoms, tables_to_atoms: TablesToAtoms
+    ) -> None:
         # simple empirical covariance of residuals
         all_tables = [obs for group in groups.values() for obs in group]
         X = np.vstack([np.asarray(xi) for arr in x.values() for xi in arr])              # (N,2)

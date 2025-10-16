@@ -30,7 +30,7 @@ def test_posterior_predictive_basic():
     f_post = compute_posterior_predictive(nodes, x, res, grid)
     # structure checks
     assert set(f_post.keys()) == set(nodes.keys())
-    for node, df in f_post.items():
+    for _node, df in f_post.items():
         assert isinstance(df, pd.DataFrame)
         assert list(df.columns) == ["x", "y"]
         assert len(df) == len(grid)

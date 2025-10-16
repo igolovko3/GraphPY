@@ -47,13 +47,11 @@ def predicted_clusters(
     atoms = np.concatenate(atoms)
     clusters = np.unique(pred_part)
     atoms_cl = np.array([np.median(atoms[pred_part == cluster]) for cluster in clusters])
-    atoms_cl = dict(zip(clusters, atoms_cl), strict=True)
+    atoms_cl = dict(zip(clusters, atoms_cl, strict=True))
 
-    pred_part_nodes = dict(
-        zip(
-            nodes.keys(),
-            np.split(pred_part, np.cumsum([len(x[node]) for node in nodes])[:-1])
-        ),
+    pred_part_nodes = dict(zip(
+        nodes.keys(),
+        np.split(pred_part, np.cumsum([len(x[node]) for node in nodes])[:-1]),
         strict=True
-    )
+    ))
     return pred_part, pred_part_nodes, atoms_cl

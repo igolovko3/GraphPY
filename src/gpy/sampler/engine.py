@@ -37,8 +37,9 @@ def initialize_groups(nodes: Nodes, x: XData, group_init_mode: str = "diffuse") 
             path_to_root.append(nodes[path_to_root[-1]]["par"][0])
         path_to_root = path_to_root[::-1]
         for _ in range(n_obs):
-            for l in path_to_root:
-                n_tables_in_node[l] = n_tables_in_node.get(l, 0) + int(group_init_mode == "diffuse")
+            for node_in_path in path_to_root:
+                n_tables_in_node[node_in_path] = n_tables_in_node.get(node_in_path, 0) \
+                        + int(group_init_mode == "diffuse")
             groups_[node].append(tuple((l, n_tables_in_node[l]) for l in path_to_root))
     return groups_
 
@@ -54,12 +55,17 @@ def get_tables_from_children(node: NodeId, nodes: Nodes, groups: Groups) -> list
     return list(tables_from_children)
 
 
-def get_samples(node: NodeId, nodes: Nodes, groups: Groups, not_i: int | None = None) -> list[TableLabel]:
+def get_samples(
+        node: NodeId, nodes: Nodes, groups: Groups, not_i: int | None = None
+) -> list[TableLabel]:
     lvl = nodes[node]["lvl"]
     tables_from_children = get_tables_from_children(node, nodes, groups)
     if not_i is None:
         return [g[lvl][1] for g in groups[node] + tables_from_children]
-    return [g[lvl][1] for g in groups[node][:not_i] + groups[node][not_i + 1:] + tables_from_children]
+    return [
+        g[lvl][1]
+        for g in groups[node][:not_i] + groups[node][not_i + 1:] + tables_from_children
+    ]
 
 
 # ---------------- likelihood / sampling that use the model ----------------
@@ -185,16 +191,20 @@ def sample_from_node(
     return tuple(itertools.chain(*cache[::-1]))
 
 
-def update_parent_weights(parents_weights: ParentsWeights, groups: Groups, alpha: Alpha, nodes: Nodes) -> None:
+def update_parent_weights(
+        parents_weights: ParentsWeights, groups: Groups, alpha: Alpha, nodes: Nodes
+) -> None:
     for node in list(parents_weights.keys()):
         tables_by_parents = [g[-2][0] for g in set(groups[node])]
-        counts = dict(zip(*np.unique(tables_by_parents, return_counts=True)))
+        counts = dict(zip(*np.unique(tables_by_parents, return_counts=True), strict=True))
         weights = np.array([alpha[parent] + counts.get(parent, 0) for parent in nodes[node]['par']])
         parents_weights[node] = list(dirichlet.rvs(weights)[0])
 
 
-def update_concentration(nodes: Nodes, groups: Groups, alpha: Alpha, a_0: float, b_0: float, sigma: float) -> None:
-    for node in nodes.keys():
+def update_concentration(
+        nodes: Nodes, groups: Groups, alpha: Alpha, a_0: float, b_0: float, sigma: float
+) -> None:
+    for node in nodes:
         samples = get_samples(node, nodes, groups)
         n_samples, n_tables = len(samples), int(len(np.unique(samples)))
         alpha_curr = alpha[node]
@@ -212,7 +222,9 @@ def update_concentration(nodes: Nodes, groups: Groups, alpha: Alpha, a_0: float,
             (alpha_prop / alpha_curr) ** a_0
             * np.exp(- b_0 * (alpha_prop - alpha_curr))
             * poch(alpha_curr + 1, n_samples - 1) / poch(alpha_prop + 1, n_samples - 1)
-            * np.prod([(alpha_prop + sigma * i) / (alpha_curr + sigma * i) for i in range(1, n_tables)])
+            * np.prod([
+                (alpha_prop + sigma * i) / (alpha_curr + sigma * i) for i in range(1, n_tables)
+            ])
             * p_rev / p_prop
         )
         if np.random.uniform() < min(1.0, float(mh_ratio)):

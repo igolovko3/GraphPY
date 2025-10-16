@@ -32,14 +32,17 @@ def compute_posterior_predictive(
 
     f_post: dict[str, pd.DataFrame] = {}
     for node in nodes:
-        clusters_node = dict(zip(*np.unique(pred_part_nodes[node], return_counts=True)), strict=True)
+        clusters_node = dict(zip(
+            *np.unique(pred_part_nodes[node], return_counts=True), strict=True
+        ))
         alpha_node = float(np.median([state[node] for state in history['concentration'][burn_in:]]))
         n_i = int(len(pred_part_nodes[node]))
         k_i = int(len(clusters_node))
 
         y_vals = [
             sum(
-                sc.stats.norm.pdf(val, loc=atoms_cl[cl], scale=sigma_x) * (n_cl - sigma) / (n_i + alpha_node)
+                sc.stats.norm.pdf(val, loc=atoms_cl[cl], scale=sigma_x) \
+                * (n_cl - sigma) / (n_i + alpha_node)
                 for cl, n_cl in clusters_node.items()
             ) + (alpha_node + sigma * k_i) / (n_i + alpha_node) * sc.stats.norm.pdf(
                 val, loc=mu_phi, scale=np.sqrt(sigma_phi ** 2 + sigma_x ** 2)
