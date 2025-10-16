@@ -1,9 +1,7 @@
-from typing import (
-    Dict, Optional, Any
-)
+from typing import Any
 
 import numpy as np
-from scipy.cluster.hierarchy import linkage, cut_tree
+from scipy.cluster.hierarchy import cut_tree, linkage
 
 
 def comp_psm(cls: np.ndarray) -> np.ndarray:
@@ -78,12 +76,11 @@ def VI_lb(cls: np.ndarray, psm: np.ndarray) -> np.ndarray:
 
 def minVI(
         psm: np.ndarray,
-        max_k: Optional[int] = None,
-        start_cl: Optional[np.ndarray] = None,
-        maxiter: Optional[int] = None,
-        l: Optional[float] = None,
+        max_k: int | None = None,
+        start_cl: np.ndarray | None = None,
+        maxiter: int | None = None,
         suppress_comment: bool = True
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Choose an “average” partition by minimizing the VI lower bound over
     average-linkage cuts of 1 - PSM (k = 1..max_k).
@@ -116,5 +113,5 @@ def minVI(
     val_avg = np.min(VI_avg)
     cl_avg = cls_avg[np.argmin(VI_avg), :]
 
-    output: Dict[str, Any] = {"cl": cl_avg, "value": val_avg, "method": "avg", "cls_avg": cls_avg}
+    output: dict[str, Any] = {"cl": cl_avg, "value": val_avg, "method": "avg", "cls_avg": cls_avg}
     return output
