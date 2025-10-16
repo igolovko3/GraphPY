@@ -1,2 +1,0 @@
-gpy
-tests
