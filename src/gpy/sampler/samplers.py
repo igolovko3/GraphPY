@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
+
+import numpy as np
+
 from gpy.sampler.engine import run_sampler
 from gpy.sampler.kernels import Gaussian1DModel, Gaussian2DModel
 from gpy.types import Nodes, XData
@@ -18,7 +21,7 @@ def GPYSampler1D(
         b_0: float = 1.0,
         group_init_mode: str = "diffuse",
         progress: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     1D wrapper with the same public API as the original GPYSampler from older versions.
     """
@@ -45,7 +48,7 @@ def GPYSampler2D(
         b_0: float = 1.0,
         group_init_mode: str = "diffuse",
         progress: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     2D wrapper. Pass 2D arrays for observations and Gaussian hyperparameters.
     """

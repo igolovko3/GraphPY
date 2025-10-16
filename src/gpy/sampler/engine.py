@@ -1,28 +1,38 @@
 from __future__ import annotations
-from typing import Dict, List, Tuple, Any, Optional
+
 import itertools
+from typing import Any
+
 import numpy as np
-from tqdm import tqdm
-from scipy.stats import dirichlet
 from scipy.special import poch
+from scipy.stats import dirichlet
+from tqdm import tqdm
 
-from gpy.types import (
-    Nodes, Groups, XData, Atoms, TablesToAtoms, TablesToPath,
-    Alpha, ParentsWeights, NodeId, Path, TableLabel
-)
 from gpy.sampler.kernels import ObservationModel
-
+from gpy.types import (
+    Alpha,
+    Atoms,
+    Groups,
+    NodeId,
+    Nodes,
+    ParentsWeights,
+    Path,
+    TableLabel,
+    TablesToAtoms,
+    TablesToPath,
+    XData,
+)
 
 # ---------------- helpers ----------------
 
 def initialize_groups(nodes: Nodes, x: XData, group_init_mode: str = "diffuse") -> Groups:
     groups_: Groups = {}
-    n_tables_in_node: Dict[NodeId, int] = {}
+    n_tables_in_node: dict[NodeId, int] = {}
     for node, info in nodes.items():
         lvl = info["lvl"]
         n_obs = len(x[node])
         groups_[node] = []
-        path_to_root: List[NodeId] = [node]
+        path_to_root: list[NodeId] = [node]
         for _ in range(lvl):
             path_to_root.append(nodes[path_to_root[-1]]["par"][0])
         path_to_root = path_to_root[::-1]
@@ -33,7 +43,7 @@ def initialize_groups(nodes: Nodes, x: XData, group_init_mode: str = "diffuse") 
     return groups_
 
 
-def get_tables_from_children(node: NodeId, nodes: Nodes, groups: Groups) -> List[Path]:
+def get_tables_from_children(node: NodeId, nodes: Nodes, groups: Groups) -> list[Path]:
     desc = nodes[node]["desc"]
     lvl = nodes[node]["lvl"]
     tables_from_children = set(
@@ -44,7 +54,7 @@ def get_tables_from_children(node: NodeId, nodes: Nodes, groups: Groups) -> List
     return list(tables_from_children)
 
 
-def get_samples(node: NodeId, nodes: Nodes, groups: Groups, not_i: Optional[int] = None) -> List[TableLabel]:
+def get_samples(node: NodeId, nodes: Nodes, groups: Groups, not_i: int | None = None) -> list[TableLabel]:
     lvl = nodes[node]["lvl"]
     tables_from_children = get_tables_from_children(node, nodes, groups)
     if not_i is None:
@@ -62,7 +72,7 @@ def likelihood_observation(
     atoms: Atoms, tables_to_atoms: TablesToAtoms,
     parents_weights: ParentsWeights,
     model: ObservationModel,
-) -> Tuple[float, Optional[List[float]]]:
+) -> tuple[float, list[float] | None]:
     lvl = nodes[node]["lvl"]
     alpha_node = alpha[node]
 
@@ -108,7 +118,7 @@ def likelihood_observation(
 
 def sample_from_node(
     node: NodeId, *,
-    i: Optional[int], x_obs: Any, cache: Optional[List[Path]],
+    i: int | None, x_obs: Any, cache: list[Path] | None,
     nodes: Nodes, groups: Groups, alpha: Alpha, sigma: float,
     atoms: Atoms, tables_to_atoms: TablesToAtoms,
     parents_weights: ParentsWeights, tables_to_path: TablesToPath, x: XData,
@@ -217,13 +227,13 @@ def run_sampler(
     x: XData,
     model: ObservationModel,
     n_iter: int = 1000,
-    burn_in: Optional[int] = None,
+    burn_in: int | None = None,
     sigma: float = 0.0,
     a_0: float = 1.0,
     b_0: float = 1.0,
     group_init_mode: str = "diffuse",
     progress: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Dimension-agnostic MCMC. All density/atom updates delegated to `model`.
     """
@@ -234,7 +244,7 @@ def run_sampler(
     if burn_in is None:
         burn_in = int(0.3 * n_iter)
 
-    history: Dict[str, List[Any]] = {
+    history: dict[str, list[Any]] = {
         "groups": [],
         "atoms": [],
         "parents_weights": [],
@@ -293,7 +303,7 @@ def run_sampler(
         history["concentration"].append(dict(alpha))
         # optional: for 1D store sigma_x if present
         if hasattr(model, "sigma_x"):
-            history["sigma_x"].append(getattr(model, "sigma_x"))
+            history["sigma_x"].append(model.sigma_x)
 
     return {
         "history": history,

@@ -1,9 +1,11 @@
 from __future__ import annotations
-from typing import Protocol
-import numpy as np
-from scipy.stats import norm, multivariate_normal
 
-from gpy.types import Groups, TablesToAtoms, Atoms, XData
+from typing import Protocol
+
+import numpy as np
+from scipy.stats import multivariate_normal, norm
+
+from gpy.types import Atoms, Groups, TablesToAtoms, XData
 
 
 class ObservationModel(Protocol):

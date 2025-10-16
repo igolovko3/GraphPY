@@ -1,0 +1,10 @@
+/venv/
+/src/gpy.egg-info/
+/src/gpy/clustering/__pycache__/
+/src/gpy/posterior/__pycache__/
+/src/gpy/sampler/__pycache__/
+/tests/__pycache__/
+/.mypy_cache/
+/.ipynb_checkpoints/
+/.pytest_cache/
+/.ruff_cache/
