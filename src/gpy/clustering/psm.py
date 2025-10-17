@@ -26,7 +26,7 @@ def comp_psm(cls: np.ndarray) -> np.ndarray:
     """
     n_obj = cls.shape[1]
     n_part = cls.shape[0]
-    psm = np.zeros((n_obj, n_obj))
+    psm: np.ndarray = np.zeros((n_obj, n_obj))
 
     for n in range(n_obj):
         for n_ in range(n_obj):
