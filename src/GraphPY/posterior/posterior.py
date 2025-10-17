@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 import scipy as sc
 
-from gpy.clustering.predict import predicted_clusters
-from gpy.types import NodeId, Nodes, XData
+from GraphPY.clustering.predict import predicted_clusters
+from GraphPY.types import NodeId, Nodes, XData
 
 
 def compute_posterior_predictive(

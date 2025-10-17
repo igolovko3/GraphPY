@@ -5,7 +5,7 @@ from typing import Protocol
 import numpy as np
 from scipy.stats import multivariate_normal, norm
 
-from gpy.types import Atoms, Groups, TablesToAtoms, XData
+from GraphPY.types import Atoms, Groups, TablesToAtoms, XData
 
 
 class ObservationModel(Protocol):

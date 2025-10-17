@@ -1,7 +1,7 @@
 import numpy as np
 
-from gpy.sampler.samplers import GPYSampler1D
-from gpy.types import Nodes
+from GraphPY.sampler.samplers import GPYSampler1D
+from GraphPY.types import Nodes
 
 
 def small_tree_and_data():

@@ -1,6 +1,6 @@
 import numpy as np
 
-from gpy.clustering.psm import VI_lb, comp_psm, minVI
+from GraphPY.clustering.psm import VI_lb, comp_psm, minVI
 
 
 def test_psm_and_minvi_shapes():

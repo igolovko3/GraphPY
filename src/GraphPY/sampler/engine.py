@@ -8,8 +8,8 @@ from scipy.special import poch
 from scipy.stats import dirichlet
 from tqdm import tqdm
 
-from gpy.sampler.kernels import ObservationModel
-from gpy.types import (
+from GraphPY.sampler.kernels import ObservationModel
+from GraphPY.types import (
     Alpha,
     Atoms,
     Groups,

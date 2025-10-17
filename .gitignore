@@ -1,10 +1,10 @@
 /venv/
 /src/gpy.egg-info/
 /src/__pycache__/
-/src/gpy/__pycache__/
-/src/gpy/clustering/__pycache__/
-/src/gpy/posterior/__pycache__/
-/src/gpy/sampler/__pycache__/
+/src/GraphPY/__pycache__/
+/src/GraphPY/clustering/__pycache__/
+/src/GraphPY/posterior/__pycache__/
+/src/GraphPY/sampler/__pycache__/
 /tests/__pycache__/
 /.mypy_cache/
 /.ipynb_checkpoints/

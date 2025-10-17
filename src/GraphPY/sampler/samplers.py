@@ -4,9 +4,9 @@ from typing import Any
 
 import numpy as np
 
-from gpy.sampler.engine import run_sampler
-from gpy.sampler.kernels import Gaussian1DModel, Gaussian2DModel
-from gpy.types import Nodes, XData
+from GraphPY.sampler.engine import run_sampler
+from GraphPY.sampler.kernels import Gaussian1DModel, Gaussian2DModel
+from GraphPY.types import Nodes, XData
 
 
 def GPYSampler1D(

@@ -3,8 +3,8 @@ from typing import Any
 
 import numpy as np
 
-from gpy.clustering.psm import comp_psm, minVI
-from gpy.types import NodeId, Nodes, XData
+from GraphPY.clustering.psm import comp_psm, minVI
+from GraphPY.types import NodeId, Nodes, XData
 
 
 def predicted_clusters(

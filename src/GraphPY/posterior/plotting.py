@@ -5,9 +5,9 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 
-from gpy.clustering.predict import predicted_clusters
-from gpy.posterior.posterior import compute_posterior_predictive
-from gpy.types import NodeId, Nodes, XData
+from GraphPY.clustering.predict import predicted_clusters
+from GraphPY.posterior.posterior import compute_posterior_predictive
+from GraphPY.types import NodeId, Nodes, XData
 
 
 def plot_posterior(
