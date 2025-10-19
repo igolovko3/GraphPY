@@ -304,6 +304,7 @@ def run_sampler(
     n_obs = {node: len(x[node]) for node in nodes}
     if burn_in is None:
         burn_in = int(0.3 * n_iter)
+    assert burn_in <= n_iter
 
     history: dict[str, list[Any]] = {
         "groups": [],
@@ -325,7 +326,8 @@ def run_sampler(
 
     # atoms & maps from initial groups
     atom_labels = {g[0][1] for t in groups.values() for g in t}
-    atoms: Atoms = {lab: 0.0 for lab in atom_labels}  # model will overwrite as needed
+    zero = 0 * np.array([xi for arr in x.values() for xi in arr], dtype=float)[0]
+    atoms: Atoms = {lab: zero for lab in atom_labels}
     tables_to_atoms: TablesToAtoms = {}
     tables_to_path: TablesToPath = {}
     for group in groups.values():
@@ -380,6 +382,7 @@ def run_sampler(
         "history": history,
         "tables_to_atoms": tables_to_atoms,
         "params": {
+            "model": model,
             "burn_in": burn_in,
             # expose model-level priors only in wrappers (1D/2D) to keep engine generic
             "sigma": sigma,

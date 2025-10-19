@@ -2,7 +2,6 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-import scipy as sc
 
 from GraphPY.clustering.predict import predicted_clusters
 from GraphPY.types import NodeId, Nodes, XData
@@ -20,10 +19,10 @@ def compute_posterior_predictive(
     """
     history = res["history"]
     burn_in = res["params"]["burn_in"]
-    mu_phi = res["params"]["mu_phi"]
-    sigma_phi = res["params"]["sigma_phi"]
     sigma = res["params"]["sigma"]
-    sigma_x = float(np.mean(history["sigma_x"][burn_in:]))
+
+    model = res["params"]["model"]
+    model_params = model.posterior_parameters(res=res)
 
     pred_part, pred_part_nodes, atoms_cl = predicted_clusters(nodes, x, res)
 
@@ -38,14 +37,14 @@ def compute_posterior_predictive(
 
         y_vals = [
             sum(
-                sc.stats.norm.pdf(val, loc=atoms_cl[cl], scale=sigma_x)
+                model.like_existing(x=val, atom=atoms_cl[cl], **model_params)
                 * (n_cl - sigma)
                 / (n_i + alpha_node)
                 for cl, n_cl in clusters_node.items()
             )
             + (alpha_node + sigma * k_i)
             / (n_i + alpha_node)
-            * sc.stats.norm.pdf(val, loc=mu_phi, scale=np.sqrt(sigma_phi**2 + sigma_x**2))
+            * model.like_new_root(x=val, **model_params)
             for val in grid_x
         ]
         f_post[node] = pd.DataFrame({"x": grid_x, "y": y_vals})

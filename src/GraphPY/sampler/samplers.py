@@ -5,11 +5,11 @@ from typing import Any
 import numpy as np
 
 from GraphPY.sampler.engine import run_sampler
-from GraphPY.sampler.kernels import Gaussian1DModel, Gaussian2DModel
+from GraphPY.sampler.kernels import Gaussian1DModel, MultivatiateGaussianModel
 from GraphPY.types import Nodes, XData
 
 
-def GPYSampler1D(
+def GPYSamplerGaussian1D(
     nodes: Nodes,
     x: XData,
     n_iter: int = 1000,
@@ -43,7 +43,7 @@ def GPYSampler1D(
     return res
 
 
-def GPYSampler2D(
+def GPYSamplerMultivariateGaussian(
     nodes: Nodes,
     x: XData,
     n_iter: int = 1000,
@@ -58,17 +58,18 @@ def GPYSampler2D(
     progress: bool = True,
 ) -> dict[str, Any]:
     """
-    2D wrapper. Pass 2D arrays for observations and Gaussian hyperparameters.
+    Multivariate Gaussian wrapper.
+    Pass N-dimensional arrays for observations and Gaussian hyperparameters.
     """
-
+    dim = np.array([xi for arr in x.values() for xi in arr], dtype=float)[0].shape[0]
     if not mu_phi:
-        mu_phi = np.zeros(2)
+        mu_phi = np.zeros(dim)
     if not Sigma_phi:
-        Sigma_phi = np.eye(2)
+        Sigma_phi = np.eye(dim)
     if not Sigma_x_init:
-        Sigma_x_init = np.eye(2)
+        Sigma_x_init = np.eye(dim)
 
-    model = Gaussian2DModel(
+    model = MultivatiateGaussianModel(
         mu_phi=np.asarray(mu_phi), Sigma_phi=np.asarray(Sigma_phi), Sigma_x=np.asarray(Sigma_x_init)
     )
     res: dict[str, Any] = run_sampler(

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Any, Protocol
 
 import numpy as np
 from scipy.stats import multivariate_normal, norm
@@ -15,11 +15,13 @@ class ObservationModel(Protocol):
     """
 
     # existing-table likelihood p(x | atom)  (vectorized x allowed)
-    def like_existing(self, x: float | np.ndarray, atom: float | np.ndarray) -> float:
+    def like_existing(
+        self, x: float | np.ndarray, atom: float | np.ndarray, **kwargs: Any
+    ) -> float:
         pass
 
     # new-table prior predictive at ROOT
-    def like_new_root(self, x: float | np.ndarray) -> float:
+    def like_new_root(self, x: float | np.ndarray, **kwargs: Any) -> float:
         pass
 
     # sample atom for NEW ROOT table given x_obs
@@ -38,6 +40,9 @@ class ObservationModel(Protocol):
     ) -> None:
         pass
 
+    def posterior_parameters(self, res: dict[str, Any]) -> dict[str, Any]:
+        pass
+
 
 # ---------- 1D Gaussian ----------
 class Gaussian1DModel(ObservationModel):
@@ -46,14 +51,36 @@ class Gaussian1DModel(ObservationModel):
         self.sigma_phi = float(sigma_phi)
         self.sigma_x = float(sigma_x)
 
-    def like_existing(self, x: float | np.ndarray, atom: float | np.ndarray) -> float:
-        like: float = norm.pdf(x, loc=atom, scale=self.sigma_x)
+    def like_existing(
+        self,
+        x: float | np.ndarray,
+        atom: float | np.ndarray,
+        *,
+        sigma_x: float | None = None,
+        **kwargs: Any,
+    ) -> float:
+        if sigma_x is None:
+            sigma_x = self.sigma_x
+        like: float = norm.pdf(x, loc=atom, scale=sigma_x)
         return like
 
-    def like_new_root(self, x: float | np.ndarray) -> float:
-        like: float = norm.pdf(
-            x, loc=self.mu_phi, scale=np.sqrt(self.sigma_phi**2 + self.sigma_x**2)
-        )
+    def like_new_root(
+        self,
+        x: float | np.ndarray,
+        *,
+        mu_phi: float | None = None,
+        sigma_phi: float | None = None,
+        sigma_x: float | None = None,
+        **kwargs: Any,
+    ) -> float:
+        if mu_phi is None:
+            mu_phi = self.mu_phi
+        if sigma_phi is None:
+            sigma_phi = self.sigma_phi
+        if sigma_x is None:
+            sigma_x = self.sigma_x
+
+        like: float = norm.pdf(x, loc=mu_phi, scale=np.sqrt(sigma_phi**2 + sigma_x**2))
         return like
 
     def sample_root_atom(self, x_obs: float | np.ndarray) -> float:
@@ -84,9 +111,22 @@ class Gaussian1DModel(ObservationModel):
         all_atoms = np.array([atoms[tables_to_atoms[g[0]]] for g in all_tables], dtype=float)
         self.sigma_x = float(np.sqrt(np.mean((all_data - all_atoms) ** 2)))
 
+    def posterior_parameters(self, res: dict[str, Any]) -> dict[str, Any]:
+        history = res["history"]
+        burn_in = res["params"]["burn_in"]
+        mu_phi = res["params"]["mu_phi"]
+        sigma_phi = res["params"]["sigma_phi"]
+        sigma_x = float(np.mean(history["sigma_x"][burn_in:]))
+        model_params: dict[str, Any] = {
+            "mu_phi": mu_phi,
+            "sigma_phi": sigma_phi,
+            "sigma_x": sigma_x,
+        }
+        return model_params
+
 
 # ---------- 2D Gaussian ----------
-class Gaussian2DModel(ObservationModel):
+class MultivatiateGaussianModel(ObservationModel):
     def __init__(self, mu_phi: np.ndarray, Sigma_phi: np.ndarray, Sigma_x: np.ndarray):
         self.mu_phi = np.asarray(mu_phi, dtype=float)  # shape (2,)
         self.Sigma_phi = np.asarray(Sigma_phi, dtype=float)  # (2,2)
@@ -95,14 +135,35 @@ class Gaussian2DModel(ObservationModel):
         self._Sigma_phi_inv = np.linalg.inv(self.Sigma_phi)
         self._Sigma_x_inv = np.linalg.inv(self.Sigma_x)
 
-    def like_existing(self, x: float | np.ndarray, atom: float | np.ndarray) -> float:
-        like: float = multivariate_normal.pdf(x, mean=np.asarray(atom), cov=self.Sigma_x)
+    def like_existing(
+        self,
+        x: float | np.ndarray,
+        atom: float | np.ndarray,
+        *,
+        Sigma_x: np.ndarray | None = None,
+        **kwargs: Any,
+    ) -> float:
+        if Sigma_x is None:
+            Sigma_x = self.Sigma_x
+        like: float = multivariate_normal.pdf(x, mean=np.asarray(atom), cov=Sigma_x)
         return like
 
-    def like_new_root(self, x: float | np.ndarray) -> float:
-        like: float = multivariate_normal.pdf(
-            x, mean=self.mu_phi, cov=self.Sigma_phi + self.Sigma_x
-        )
+    def like_new_root(
+        self,
+        x: float | np.ndarray,
+        *,
+        mu_phi: np.ndarray | None = None,
+        Sigma_phi: np.ndarray | None = None,
+        Sigma_x: np.ndarray | None = None,
+        **kwargs: Any,
+    ) -> float:
+        if mu_phi is None:
+            mu_phi = self.mu_phi
+        if Sigma_phi is None:
+            Sigma_phi = self.Sigma_phi
+        if Sigma_x is None:
+            Sigma_x = self.Sigma_x
+        like: float = multivariate_normal.pdf(x, mean=mu_phi, cov=Sigma_phi + Sigma_x)
         return like
 
     def sample_root_atom(self, x_obs: float | np.ndarray) -> np.ndarray:

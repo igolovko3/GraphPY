@@ -1,5 +1,5 @@
 /venv/
-/src/gpy.egg-info/
+/src/GraphPY.egg-info/
 /src/__pycache__/
 /src/GraphPY/__pycache__/
 /src/GraphPY/clustering/__pycache__/
@@ -8,6 +8,8 @@
 /tests/__pycache__/
 /.mypy_cache/
 /.ipynb_checkpoints/
+/examples/.ipynb_checkpoints
+/build/
 /.pytest_cache/
 /.ruff_cache/
 .DS_Store

@@ -1,6 +1,6 @@
 import numpy as np
 
-from GraphPY.sampler.samplers import GPYSampler1D
+from GraphPY.sampler.samplers import GPYSamplerGaussian1D
 from GraphPY.types import Nodes
 
 
@@ -19,12 +19,12 @@ def small_tree_and_data():
 
 def test_sampler_smoke():
     nodes, x = small_tree_and_data()
-    res = GPYSampler1D(
+    res = GPYSamplerGaussian1D(
         nodes,
         x,
         n_iter=30,
         burn_in=10,
-        sigma=0.0,  # small, fast
+        sigma=0.0,
         mu_phi=0.0,
         sigma_phi=5.0,
         a_0=1.0,

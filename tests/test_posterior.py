@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from GraphPY.posterior.posterior import compute_posterior_predictive
-from GraphPY.sampler.samplers import GPYSampler1D
+from GraphPY.sampler.samplers import GPYSamplerGaussian1D
 from GraphPY.types import Nodes
 
 
@@ -17,7 +17,7 @@ def tiny_run():
         "a": list(np.random.normal(-2.0, 1.0, size=5)),
         "b": list(np.random.normal(2.0, 1.0, size=6)),
     }
-    res = GPYSampler1D(nodes, x, n_iter=25, burn_in=10, progress=False)
+    res = GPYSamplerGaussian1D(nodes, x, n_iter=25, burn_in=10, progress=False)
     return nodes, x, res
 
 
