@@ -21,7 +21,7 @@ def compute_posterior_predictive(
     burn_in = res["params"]["burn_in"]
     sigma = res["params"]["sigma"]
 
-    model = res["params"]["model"]
+    model = res["model"]
     model_params = model.posterior_parameters(res=res)
 
     pred_part, pred_part_nodes, atoms_cl = predicted_clusters(nodes, x, res)
@@ -31,7 +31,7 @@ def compute_posterior_predictive(
         clusters_node = dict(
             zip(*np.unique(pred_part_nodes[node], return_counts=True), strict=True)
         )
-        alpha_node = float(np.median([state[node] for state in history["concentration"][burn_in:]]))
+        alpha_node = float(np.mean([state[node] for state in history["concentration"][burn_in:]]))
         n_i = int(len(pred_part_nodes[node]))
         k_i = int(len(clusters_node))
 

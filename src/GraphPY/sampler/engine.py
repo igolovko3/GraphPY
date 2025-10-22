@@ -296,24 +296,15 @@ def run_sampler(
     progress: bool = True,
 ) -> dict[str, Any]:
     """
-    Dimension-agnostic MCMC. All density/atom updates delegated to `model`.
+    Dimension/distribution-agnostic MCMC. All likelihood-related calculations delegated to `model`.
     """
     assert nodes.keys() == x.keys()
     assert group_init_mode in ["diffuse", "concentrated"]
 
     n_obs = {node: len(x[node]) for node in nodes}
     if burn_in is None:
-        burn_in = int(0.3 * n_iter)
-    assert burn_in <= n_iter
-
-    history: dict[str, list[Any]] = {
-        "groups": [],
-        "atoms": [],
-        "parents_weights": [],
-        "concentration": [],
-        # model maintains its own kernel params; store useful summaries if needed
-        "sigma_x": [],  # present for 1D parity; leave empty for 2D unless you add a getter
-    }
+        burn_in = int(0.3 * n_iter) + 1
+    assert burn_in < n_iter
 
     # init
     groups = initialize_groups(nodes, x, group_init_mode)
@@ -335,6 +326,13 @@ def run_sampler(
             for lvl in range(len(obs)):
                 tables_to_atoms[obs[lvl]] = obs[0][1]
                 tables_to_path[obs[lvl]] = obs[: lvl + 1]
+
+    history: dict[str, list[Any]] = {
+        "groups": [{k: list(v) for k, v in groups.items()}],
+        "atoms": [dict(atoms)],
+        "parents_weights": [dict(parents_weights)],
+        "concentration": [dict(alpha)],
+    }
 
     it_range = tqdm(range(n_iter), desc="Processing", unit="iter") if progress else range(n_iter)
     for _ in it_range:
@@ -367,6 +365,7 @@ def run_sampler(
         model.update_atoms(groups, x, tables_to_atoms, atoms)
         update_parent_weights(parents_weights, groups, alpha, nodes)
         update_concentration(nodes, groups, alpha, a_0, b_0, sigma)
+        model.update_base_distribution(groups, x, atoms, tables_to_atoms)
         model.update_kernel(groups, x, atoms, tables_to_atoms)
 
         # record
@@ -374,17 +373,13 @@ def run_sampler(
         history["atoms"].append(dict(atoms))
         history["parents_weights"].append(dict(parents_weights))
         history["concentration"].append(dict(alpha))
-        # optional: for 1D store sigma_x if present
-        if hasattr(model, "sigma_x"):
-            history["sigma_x"].append(model.sigma_x)
 
     return {
         "history": history,
         "tables_to_atoms": tables_to_atoms,
+        "model": model,
         "params": {
-            "model": model,
             "burn_in": burn_in,
-            # expose model-level priors only in wrappers (1D/2D) to keep engine generic
             "sigma": sigma,
             "a_0": a_0,
             "b_0": b_0,

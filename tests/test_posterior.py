@@ -17,17 +17,18 @@ def tiny_run():
         "a": list(np.random.normal(-2.0, 1.0, size=5)),
         "b": list(np.random.normal(2.0, 1.0, size=6)),
     }
-    res = GPYSamplerGaussian1D(nodes, x, n_iter=25, burn_in=10, progress=False)
+    res = GPYSamplerGaussian1D(nodes, x, n_iter=30, burn_in=10, progress=False)
     return nodes, x, res
 
 
 def test_posterior_predictive_basic():
     nodes, x, res = tiny_run()
-    # choose a reasonably wide grid
     data_all = np.array([v for arr in x.values() for v in arr], dtype=float)
-    sigma_x = float(np.mean(res["history"]["sigma_x"][res["params"]["burn_in"] :] or [1.0]))
+    sigma_x = float(
+        np.mean(res["model"].param_history["sigma_x"][res["params"]["burn_in"] :] or [1.0])
+    )
     grid = np.linspace(data_all.min() - 5 * sigma_x, data_all.max() + 5 * sigma_x, 800)
-
+    print(res["model"].param_history)
     f_post = compute_posterior_predictive(nodes, x, res, grid)
     # structure checks
     assert set(f_post.keys()) == set(nodes.keys())
@@ -38,3 +39,7 @@ def test_posterior_predictive_basic():
         # sanity: densities non-negative & finite
         assert (df["y"].values >= 0).all()
         assert np.isfinite(df["y"].values).all()
+
+
+if __name__ == "__main__":
+    tiny_run()
