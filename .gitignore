@@ -5,6 +5,7 @@
 /src/GraphPY/clustering/__pycache__/
 /src/GraphPY/posterior/__pycache__/
 /src/GraphPY/sampler/__pycache__/
+/src/GraphPY/utils/__pycache__/
 /tests/__pycache__/
 /.mypy_cache/
 /.ipynb_checkpoints/
