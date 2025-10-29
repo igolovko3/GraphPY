@@ -5,7 +5,7 @@ MCMC sampler for Graphical Pitman–Yor process mixture model with pluggable obs
 ## Installation
 Clone the repository and run from source:
 ```bash
-pip install -e .
+pip install .
 ```
 
 Alternatively, to directly install the library run:
