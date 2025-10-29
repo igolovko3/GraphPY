@@ -7,8 +7,8 @@ def fork(n_nodes: int = 4) -> Nodes:
     :param n_nodes: number of leaves in the graph
     """
     leaves = [str(node) for node in range(1, n_nodes + 1)]
-    fork_dag: Nodes = {"0": {"lvl": [0], "desc": [node for node in leaves], "par": []}}
-    fork_dag.update({node: {"lvl": [1], "desc": [], "par": ["0"]} for node in leaves})
+    fork_dag: Nodes = {"0": {"lvl": 0, "desc": [node for node in leaves], "par": []}}
+    fork_dag.update({node: {"lvl": 1, "desc": [], "par": ["0"]} for node in leaves})
     return fork_dag
 
 
