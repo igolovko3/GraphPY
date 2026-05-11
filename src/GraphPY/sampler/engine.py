@@ -4,8 +4,7 @@ import itertools
 from typing import Any
 
 import numpy as np
-from scipy.special import poch
-from scipy.stats import dirichlet
+from scipy.stats import dirichlet, norm
 from tqdm import tqdm
 
 from GraphPY.sampler.kernels import ObservationModel
@@ -246,37 +245,78 @@ def update_parent_weights(
         parents_weights[node] = list(dirichlet.rvs(weights)[0])
 
 
+def concentration_ll(alpha: float, sigma: float, counts: list[int]) -> float:
+    n = int(np.sum(counts))
+    j = int(len(counts))
+    return float(
+        np.sum([np.log(alpha + i * sigma) for i in range(1, j)])
+        - np.sum([np.log(alpha + i) for i in range(1, n)])
+    )
+
+
+def discount_ll(alpha: float, sigma: float, counts: list[int]) -> float:
+    j = int(len(counts))
+    return float(
+        np.sum([np.log(alpha + i * sigma) for i in range(1, j)])
+        + np.sum([np.sum([np.log(1 - sigma + k) for k in range(n_i - 1)]) for n_i in counts])
+    )
+
+
 def update_concentration(
-    nodes: Nodes, groups: Groups, alpha: Alpha, a_0: float, b_0: float, sigma: float
+    nodes: Nodes,
+    groups: Groups,
+    tables_to_atoms: TablesToAtoms,
+    alpha: Alpha,
+    a_0: float,
+    b_0: float,
+    sigma: float,
 ) -> None:
     for node in nodes:
         samples = get_samples(node, nodes, groups)
-        n_samples, n_tables = len(samples), int(len(np.unique(samples)))
+        samples_atoms = [tables_to_atoms[(node, sample)] for sample in samples]
+        counts = np.unique(samples_atoms, return_counts=True)[1]
         alpha_curr = alpha[node]
-        # proposal: truncated normal on (0, 2*alpha_curr)
-        a_trunc, b_trunc = 0.0, 2.0 * alpha_curr
-        loc, scale = alpha_curr, alpha_curr
-        a, b = (a_trunc - loc) / scale, (b_trunc - loc) / scale
-        from scipy.stats import truncnorm
 
-        alpha_prop = float(truncnorm.rvs(a, b, loc=loc, scale=scale))
-        a_rev, b_rev = (0.0 - alpha_prop) / alpha_prop, (2.0 * alpha_prop - alpha_prop) / alpha_prop
-        p_prop = float(truncnorm.pdf(alpha_prop, a=a, b=b, loc=loc, scale=scale))
-        p_rev = float(truncnorm.pdf(alpha_curr, a=a_rev, b=b_rev, loc=alpha_prop, scale=alpha_prop))
+        # proposal: standard normal proposal
+        alpha_prop = float(norm.rvs(loc=alpha_curr))
 
-        mh_ratio = (
-            (alpha_prop / alpha_curr) ** a_0
-            * np.exp(-b_0 * (alpha_prop - alpha_curr))
-            * poch(alpha_curr + 1, n_samples - 1)
-            / poch(alpha_prop + 1, n_samples - 1)
-            * np.prod(
-                [(alpha_prop + sigma * i) / (alpha_curr + sigma * i) for i in range(1, n_tables)]
+        if alpha_prop > 0:
+            mh_ratio = (
+                (alpha_prop / alpha_curr) ** a_0
+                * np.exp(-b_0 * (alpha_prop - alpha_curr))
+                * np.exp(
+                    concentration_ll(alpha_prop, sigma, counts)
+                    - concentration_ll(alpha_curr, sigma, counts)
+                )
+                # * p_rev
+                # / p_prop
             )
-            * p_rev
-            / p_prop
-        )
-        if np.random.uniform() < min(1.0, float(mh_ratio)):
-            alpha[node] = float(alpha_prop)
+            if np.random.uniform() < min(1.0, float(mh_ratio)):
+                alpha[node] = float(alpha_prop)
+
+
+def update_discount(
+    nodes: Nodes, groups: Groups, tables_to_atoms: TablesToAtoms, alpha: Alpha, sigma: float
+) -> float:
+    grid = np.linspace(0, 1, 21)
+    log_p = np.zeros(21)
+
+    for node in nodes:
+
+        alpha_node = alpha[node]
+        samples = get_samples(node, nodes, groups)
+        samples_atoms = [tables_to_atoms[(node, sample)] for sample in samples]
+        counts = np.unique(samples_atoms, return_counts=True)[1]
+
+        for k in range(len(grid)):
+            sigma_prop = grid[k]
+            log_p[k] += discount_ll(alpha_node, sigma_prop, counts)
+
+    log_p -= np.max(log_p)
+    p = np.exp(log_p)
+    p /= np.sum(p)
+
+    return float(np.random.choice(grid, p=p))
 
 
 # ---------------- main engine ----------------
@@ -332,6 +372,7 @@ def run_sampler(
         "atoms": [dict(atoms)],
         "parents_weights": [dict(parents_weights)],
         "concentration": [dict(alpha)],
+        "sigma": [sigma],
     }
 
     it_range = tqdm(range(n_iter), desc="Processing", unit="iter") if progress else range(n_iter)
@@ -363,16 +404,19 @@ def run_sampler(
 
         # model-specific parameter updates
         model.update_atoms(groups, x, tables_to_atoms, atoms)
-        update_parent_weights(parents_weights, groups, alpha, nodes)
-        update_concentration(nodes, groups, alpha, a_0, b_0, sigma)
         model.update_base_distribution(groups, x, atoms, tables_to_atoms)
         model.update_kernel(groups, x, atoms, tables_to_atoms)
+
+        update_parent_weights(parents_weights, groups, alpha, nodes)
+        update_concentration(nodes, groups, tables_to_atoms, alpha, a_0, b_0, sigma)
+        sigma = update_discount(nodes, groups, tables_to_atoms, alpha, sigma)
 
         # record
         history["groups"].append({k: list(v) for k, v in groups.items()})
         history["atoms"].append(dict(atoms))
         history["parents_weights"].append(dict(parents_weights))
         history["concentration"].append(dict(alpha))
+        history["sigma"].append(sigma)
 
     return {
         "history": history,
@@ -380,7 +424,6 @@ def run_sampler(
         "model": model,
         "params": {
             "burn_in": burn_in,
-            "sigma": sigma,
             "a_0": a_0,
             "b_0": b_0,
         },

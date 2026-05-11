@@ -2,6 +2,7 @@ from typing import Any
 
 import numpy as np
 from scipy.cluster.hierarchy import cut_tree, linkage
+from scipy.spatial.distance import squareform
 
 
 def comp_psm(cls: np.ndarray) -> np.ndarray:
@@ -107,7 +108,8 @@ def minVI(
     if max_k is None:
         max_k = int(np.ceil(psm.shape[0] / 4))
 
-    hclust_avg = linkage(1 - psm, method="average")
+    condensed = squareform(1 - psm, checks=False)
+    hclust_avg = linkage(condensed, method="average")
     cls_avg = cut_tree(hclust_avg, range(1, max_k + 1)).T
     VI_avg = VI_lb(cls_avg, psm)
     val_avg = np.min(VI_avg)

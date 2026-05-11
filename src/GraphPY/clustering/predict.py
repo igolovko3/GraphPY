@@ -112,7 +112,12 @@ def predicted_clusters_2D(
     atoms_cl = dict(
         zip(
             clusters,
-            np.array([np.median(atoms[pred_part == cluster]) for cluster in clusters]),
+            np.array(
+                [
+                    np.mean(atoms[pred_part == cluster].reshape(-1, 2), axis=0)
+                    for cluster in clusters
+                ]
+            ),
             strict=True,
         )
     )

@@ -19,7 +19,7 @@ def compute_posterior_predictive(
     """
     history = res["history"]
     burn_in = res["params"]["burn_in"]
-    sigma = res["params"]["sigma"]
+    sigma = np.mean(history["sigma"][burn_in:])
 
     model = res["model"]
     model_params = model.posterior_parameters(res=res)
