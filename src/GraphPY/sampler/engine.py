@@ -245,7 +245,7 @@ def update_parent_weights(
         parents_weights[node] = list(dirichlet.rvs(weights)[0])
 
 
-def concentration_ll(alpha: float, sigma: float, counts: list[int]) -> float:
+def concentration_ll(alpha: float, sigma: float, counts: Any) -> float:
     n = int(np.sum(counts))
     j = int(len(counts))
     return float(
@@ -254,7 +254,7 @@ def concentration_ll(alpha: float, sigma: float, counts: list[int]) -> float:
     )
 
 
-def discount_ll(alpha: float, sigma: float, counts: list[int]) -> float:
+def discount_ll(alpha: float, sigma: float, counts: Any) -> float:
     j = int(len(counts))
     return float(
         np.sum([np.log(alpha + i * sigma) for i in range(1, j)])
