@@ -334,6 +334,7 @@ def run_sampler(
     b_0: float = 1.0,
     group_init_mode: str = "diffuse",
     progress: bool = True,
+    freeze_sigma: bool = False,
 ) -> dict[str, Any]:
     """
     Dimension/distribution-agnostic MCMC. All likelihood-related calculations delegated to `model`.
@@ -409,7 +410,8 @@ def run_sampler(
 
         update_parent_weights(parents_weights, groups, alpha, nodes)
         update_concentration(nodes, groups, tables_to_atoms, alpha, a_0, b_0, sigma)
-        sigma = update_discount(nodes, groups, tables_to_atoms, alpha, sigma)
+        if not freeze_sigma:
+            sigma = update_discount(nodes, groups, tables_to_atoms, alpha, sigma)
 
         # record
         history["groups"].append({k: list(v) for k, v in groups.items()})

@@ -26,6 +26,7 @@ def GPYSamplerGaussian1D(
     b_0: float = 1.0,
     group_init_mode: str = "diffuse",
     progress: bool = True,
+    freeze_sigma: bool = False,
 ) -> dict[str, Any]:
     """
     Wrapper for the engine with the Gaussian1D Model
@@ -51,6 +52,7 @@ def GPYSamplerGaussian1D(
         b_0=b_0,
         group_init_mode=group_init_mode,
         progress=progress,
+        freeze_sigma=freeze_sigma,
     )
     return res
 
@@ -72,6 +74,7 @@ def GPYSamplerMultivariateGaussian(
     b_0: float = 1.0,
     group_init_mode: str = "diffuse",
     progress: bool = True,
+    freeze_sigma: bool = False,
 ) -> dict[str, Any]:
     """
     Wrapper for the engine with the MultivariateGaussian Model
@@ -99,6 +102,7 @@ def GPYSamplerMultivariateGaussian(
         b_0=b_0,
         group_init_mode=group_init_mode,
         progress=progress,
+        freeze_sigma=freeze_sigma,
     )
 
     return res
