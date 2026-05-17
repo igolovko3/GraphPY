@@ -238,10 +238,11 @@ def sample_from_node(
 def update_parent_weights(
     parents_weights: ParentsWeights, groups: Groups, alpha: Alpha, nodes: Nodes
 ) -> None:
+    # Note: dependence on alpha is deprecated
     for node in list(parents_weights.keys()):
         tables_by_parents = [g[-2][0] for g in set(groups[node])]
         counts = dict(zip(*np.unique(tables_by_parents, return_counts=True), strict=True))
-        weights = np.array([alpha[parent] + counts.get(parent, 0) for parent in nodes[node]["par"]])
+        weights = np.array([1e-5 + counts.get(parent, 0) for parent in nodes[node]["par"]])
         parents_weights[node] = list(dirichlet.rvs(weights)[0])
 
 

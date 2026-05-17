@@ -5,7 +5,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from scipy.stats import beta, dirichlet, gamma, multivariate_normal
+from scipy.stats import beta, gamma, multivariate_normal
 
 from GraphPY.types import Nodes
 
@@ -47,7 +47,7 @@ def generate_data_multivariate_gaussian(
         for node in nodes:
             n_par = len(nodes[node]["par"])
             if n_par > 0:
-                parent_weights[node] = dirichlet.rvs(np.ones(n_par))[0]
+                parent_weights[node] = np.ones(n_par) / n_par
 
     parent_indicators = {}
     weights = {}
