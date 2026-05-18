@@ -205,7 +205,7 @@ def sample_from_node(
     else:
         cache.append(tuple([(node, table_sampled)]))
         if lvl == 0:
-            atoms[table_sampled] = model.sample_root_atom(np.asarray(x_obs))
+            atoms[hash((node, table_sampled))] = model.sample_root_atom(np.asarray(x_obs))
         else:
             parents = nodes[node]["par"]
             if len(parents) == 1:
@@ -358,7 +358,7 @@ def run_sampler(
     }
 
     # atoms & maps from initial groups
-    atom_labels = {g[0][1] for t in groups.values() for g in t}
+    atom_labels = {hash(g[0]) for t in groups.values() for g in t}
     zero = 0 * np.array([xi for arr in x.values() for xi in arr], dtype=float)[0]
     atoms: Atoms = {lab: zero for lab in atom_labels}
     tables_to_atoms: TablesToAtoms = {}
@@ -366,7 +366,7 @@ def run_sampler(
     for group in groups.values():
         for obs in group:
             for lvl in range(len(obs)):
-                tables_to_atoms[obs[lvl]] = obs[0][1]
+                tables_to_atoms[obs[lvl]] = hash(obs[0])
                 tables_to_path[obs[lvl]] = obs[: lvl + 1]
 
     history: dict[str, list[Any]] = {
@@ -400,7 +400,7 @@ def run_sampler(
                 )
                 # update maps
                 for lvl in range(len(new_path)):
-                    tables_to_atoms[new_path[lvl]] = new_path[0][1]
+                    tables_to_atoms[new_path[lvl]] = hash(new_path[0])
                     tables_to_path[new_path[lvl]] = new_path[: lvl + 1]
                 groups[node][i] = new_path
 

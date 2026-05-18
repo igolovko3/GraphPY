@@ -24,7 +24,7 @@ def predicted_clusters(
     burn_in = res["params"]["burn_in"]
 
     partitions = [
-        [g_obs[0][1] for g_obs in itertools.chain(*[g[node] for node in nodes])]
+        [tables_to_atoms[g_obs[0]] for g_obs in itertools.chain(*[g[node] for node in nodes])]
         for g in history["groups"][burn_in:]
     ]
 
