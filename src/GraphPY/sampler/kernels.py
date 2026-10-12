@@ -338,5 +338,7 @@ class MultivariateGaussianModel(ObservationModel):
 
         self.Sigma_phi = invwishart.rvs(df=nu_post, scale=psi_post)
         self.mu_phi = multivariate_normal.rvs(mean=mu_post, cov=self.Sigma_phi / lambda_post)
+        self._Sigma_phi_inv = np.linalg.inv(self.Sigma_phi)
+
         self.param_history["Sigma_phi"].append(self.Sigma_phi)
         self.param_history["mu_phi"].append(self.mu_phi)
