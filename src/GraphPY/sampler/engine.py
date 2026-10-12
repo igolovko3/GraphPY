@@ -25,27 +25,51 @@ from GraphPY.types import (
 # ---------------- helpers ----------------
 
 
-def initialize_groups(nodes: Nodes, x: XData, group_init_mode: str = "diffuse") -> Groups:
+def initialize_groups(nodes: Nodes, x: XData, group_init_mode: str = "random") -> Groups:
     groups_: Groups = {}
     n_tables_in_node: dict[NodeId, int] = {}
+
+    def random_path_to(node: NodeId) -> Path:
+        # path of a random customer at `node`; a node without observations gets a fresh table
+        if groups_[node]:
+            return groups_[node][np.random.choice(len(groups_[node]))]
+        n_tables_in_node[node] = n_tables_in_node.get(node, 0) + 1
+        table = (node, n_tables_in_node[node])
+        if nodes[node]["lvl"] == 0:
+            return (table,)
+        return random_path_to(str(np.random.choice(nodes[node]["par"]))) + (table,)
+
     for node, info in nodes.items():
         lvl = info["lvl"]
         n_obs = len(x[node])
         groups_[node] = []
+        par = info["par"]
         path_to_root: list[NodeId] = [node]
-        for _ in range(lvl):
-            path_to_root.append(nodes[path_to_root[-1]]["par"][0])
-        path_to_root = path_to_root[::-1]
-        for _ in range(n_obs):
-            for node_in_path in path_to_root:
-                n_tables_in_node[node_in_path] = n_tables_in_node.get(node_in_path, 0) + int(
-                    group_init_mode == "diffuse"
+
+        if group_init_mode == "random":
+            if lvl == 0:
+                groups_[node] = [((node, i + 1),) for i in range(n_obs)]
+            else:
+                for i in range(n_obs):
+                    parent = str(np.random.choice(par))
+                    groups_[node].append(random_path_to(parent) + ((node, i),))
+
+        else:
+            for _ in range(lvl):
+                path_to_root.append(nodes[path_to_root[-1]]["par"][0])
+            path_to_root = path_to_root[::-1]
+            for _ in range(n_obs):
+                for node_in_path in path_to_root:
+                    n_tables_in_node[node_in_path] = n_tables_in_node.get(node_in_path, 0) + int(
+                        group_init_mode == "diffuse"
+                    )
+                groups_[node].append(
+                    tuple(
+                        (node_in_path, n_tables_in_node[node_in_path])
+                        for node_in_path in path_to_root
+                    )
                 )
-            groups_[node].append(
-                tuple(
-                    (node_in_path, n_tables_in_node[node_in_path]) for node_in_path in path_to_root
-                )
-            )
+
     return groups_
 
 
@@ -58,16 +82,10 @@ def get_tables_from_children(node: NodeId, nodes: Nodes, groups: Groups) -> list
     return list(tables_from_children)
 
 
-def get_samples(
-    node: NodeId, nodes: Nodes, groups: Groups, not_i: int | None = None
-) -> list[TableLabel]:
+def get_samples(node: NodeId, nodes: Nodes, groups: Groups) -> list[TableLabel]:
     lvl = nodes[node]["lvl"]
     tables_from_children = get_tables_from_children(node, nodes, groups)
-    if not_i is None:
-        return [g[lvl][1] for g in groups[node] + tables_from_children]
-    return [
-        g[lvl][1] for g in groups[node][:not_i] + groups[node][not_i + 1 :] + tables_from_children
-    ]
+    return [g[lvl][1] for g in groups[node] + tables_from_children]
 
 
 # ---------------- likelihood / sampling that use the model ----------------
@@ -85,7 +103,7 @@ def likelihood_observation(
     tables_to_atoms: TablesToAtoms,
     parents_weights: ParentsWeights,
     model: ObservationModel,
-) -> tuple[float, list[float] | None]:
+) -> tuple[float, list[float] | None, float]:
     lvl = nodes[node]["lvl"]
     alpha_node = alpha[node]
 
@@ -104,11 +122,11 @@ def likelihood_observation(
 
     likelihood_parents = None
     if lvl == 0:
-        p_new *= float(model.like_new_root(np.asarray([x_obs]).ravel()))
+        likelihood_new = float(model.like_new_root(np.asarray([x_obs]).ravel()))
     else:
         parents = nodes[node]["par"]
         if len(parents) == 1:
-            p_new *= likelihood_observation(
+            likelihood_new = likelihood_observation(
                 parents[0],
                 x_obs,
                 nodes=nodes,
@@ -137,15 +155,15 @@ def likelihood_observation(
                 )[0]
                 for p in parents
             ]
-            p_new *= float(np.sum(np.array(weights) * np.array(likelihood_parents)))
+            likelihood_new = float(np.sum(np.array(weights) * np.array(likelihood_parents)))
+    p_new *= likelihood_new
 
-    return float(np.sum(p_old) + p_new), likelihood_parents
+    return float(np.sum(p_old) + p_new), likelihood_parents, likelihood_new
 
 
 def sample_from_node(
     node: NodeId,
     *,
-    i: int | None,
     x_obs: Any,
     cache: list[Path] | None,
     nodes: Nodes,
@@ -156,19 +174,15 @@ def sample_from_node(
     tables_to_atoms: TablesToAtoms,
     parents_weights: ParentsWeights,
     tables_to_path: TablesToPath,
-    x: XData,
     model: ObservationModel,
 ) -> Path:
-    assert not (i is None and x_obs is None)
-    if x_obs is None:
-        x_obs = x[node][i]
     if cache is None:
         cache = []
 
     lvl = nodes[node]["lvl"]
     alpha_node = alpha[node]
 
-    samples = get_samples(node, nodes, groups, not_i=i)
+    samples = get_samples(node, nodes, groups)
     tables, counts = np.unique(samples, return_counts=True)
     n_samples, n_tables = int(sum(counts)), int(len(tables))
 
@@ -179,7 +193,7 @@ def sample_from_node(
         at_label = tables_to_atoms[(node, int(tables[t]))]
         p_old[t] *= float(model.like_existing(np.asarray([x_obs]).ravel(), atoms[at_label]))
 
-    likelihood_new, likelihood_parents = likelihood_observation(
+    likelihood_node, likelihood_parents, likelihood_new = likelihood_observation(
         node,
         x_obs,
         nodes=nodes,
@@ -197,7 +211,7 @@ def sample_from_node(
     p = p / p.sum()
 
     tl = list(map(int, list(tables)))
-    tl.append(max(tl) + 1)
+    tl.append(max(tl, default=0) + 1)
     table_sampled = int(np.random.choice(a=tl, size=1, p=p)[0])
 
     if table_sampled < max(tl):
@@ -205,7 +219,7 @@ def sample_from_node(
     else:
         cache.append(tuple([(node, table_sampled)]))
         if lvl == 0:
-            atoms[table_sampled] = model.sample_root_atom(np.asarray(x_obs))
+            atoms[hash((node, table_sampled))] = model.sample_root_atom(np.asarray(x_obs))
         else:
             parents = nodes[node]["par"]
             if len(parents) == 1:
@@ -217,7 +231,6 @@ def sample_from_node(
                 parent = str(np.random.choice(a=parents, p=p_par))
             sample_from_node(
                 parent,
-                i=None,
                 x_obs=x_obs,
                 cache=cache,
                 nodes=nodes,
@@ -228,7 +241,6 @@ def sample_from_node(
                 tables_to_atoms=tables_to_atoms,
                 parents_weights=parents_weights,
                 tables_to_path=tables_to_path,
-                x=x,
                 model=model,
             )
 
@@ -242,7 +254,8 @@ def update_parent_weights(
     for node in list(parents_weights.keys()):
         tables_by_parents = [g[-2][0] for g in set(groups[node])]
         counts = dict(zip(*np.unique(tables_by_parents, return_counts=True), strict=True))
-        weights = np.array([1e-5 + counts.get(parent, 0) for parent in nodes[node]["par"]])
+        # TODO: re-write parameter
+        weights = np.array([1 + counts.get(parent, 0) for parent in nodes[node]["par"]])
         parents_weights[node] = list(dirichlet.rvs(weights)[0])
 
 
@@ -266,7 +279,6 @@ def discount_ll(alpha: float, sigma: float, counts: Any) -> float:
 def update_concentration(
     nodes: Nodes,
     groups: Groups,
-    tables_to_atoms: TablesToAtoms,
     alpha: Alpha,
     a_0: float,
     b_0: float,
@@ -274,8 +286,8 @@ def update_concentration(
 ) -> None:
     for node in nodes:
         samples = get_samples(node, nodes, groups)
-        samples_atoms = [tables_to_atoms[(node, sample)] for sample in samples]
-        counts = np.unique(samples_atoms, return_counts=True)[1]
+        # customers per table in this node's restaurant (own obs + descendants' tables)
+        counts = np.unique(samples, return_counts=True)[1]
         alpha_curr = alpha[node]
 
         # proposal: standard normal proposal
@@ -283,7 +295,7 @@ def update_concentration(
 
         if alpha_prop > 0:
             mh_ratio = (
-                (alpha_prop / alpha_curr) ** a_0
+                (alpha_prop / alpha_curr) ** (a_0 - 1)
                 * np.exp(-b_0 * (alpha_prop - alpha_curr))
                 * np.exp(
                     concentration_ll(alpha_prop, sigma, counts)
@@ -296,18 +308,17 @@ def update_concentration(
                 alpha[node] = float(alpha_prop)
 
 
-def update_discount(
-    nodes: Nodes, groups: Groups, tables_to_atoms: TablesToAtoms, alpha: Alpha, sigma: float
-) -> float:
-    grid = np.linspace(0, 1, 21)
-    log_p = np.zeros(21)
+def update_discount(nodes: Nodes, groups: Groups, alpha: Alpha) -> float:
+    # PY discount must lie in [0, 1): drop sigma = 1 from the grid
+    grid = np.linspace(0, 1, 21)[:-1]
+    log_p = np.zeros(len(grid))
 
     for node in nodes:
 
         alpha_node = alpha[node]
         samples = get_samples(node, nodes, groups)
-        samples_atoms = [tables_to_atoms[(node, sample)] for sample in samples]
-        counts = np.unique(samples_atoms, return_counts=True)[1]
+        # customers per table in this node's restaurant (own obs + descendants' tables)
+        counts = np.unique(samples, return_counts=True)[1]
 
         for k in range(len(grid)):
             sigma_prop = grid[k]
@@ -340,12 +351,13 @@ def run_sampler(
     """
     Dimension/distribution-agnostic MCMC. All likelihood-related calculations delegated to `model`.
     """
-    assert nodes.keys() == x.keys()
-    assert group_init_mode in ["diffuse", "concentrated"]
+    # downstream code pairs groups (nodes order) with x positionally
+    assert list(nodes) == list(x), "nodes and x must have the same keys in the same order"
+    assert group_init_mode in ["diffuse", "concentrated", "random"]
 
     n_obs = {node: len(x[node]) for node in nodes}
     if burn_in is None:
-        burn_in = int(0.3 * n_iter) + 1
+        burn_in = int(0.3 * n_iter)
     assert burn_in < n_iter
 
     # init
@@ -358,7 +370,7 @@ def run_sampler(
     }
 
     # atoms & maps from initial groups
-    atom_labels = {g[0][1] for t in groups.values() for g in t}
+    atom_labels = {hash(g[0]) for t in groups.values() for g in t}
     zero = 0 * np.array([xi for arr in x.values() for xi in arr], dtype=float)[0]
     atoms: Atoms = {lab: zero for lab in atom_labels}
     tables_to_atoms: TablesToAtoms = {}
@@ -366,7 +378,7 @@ def run_sampler(
     for group in groups.values():
         for obs in group:
             for lvl in range(len(obs)):
-                tables_to_atoms[obs[lvl]] = obs[0][1]
+                tables_to_atoms[obs[lvl]] = hash(obs[0])
                 tables_to_path[obs[lvl]] = obs[: lvl + 1]
 
     history: dict[str, list[Any]] = {
@@ -382,10 +394,11 @@ def run_sampler(
         # table assignments
         for node in nodes:
             for i in range(n_obs[node]):
+                # remove obs i from every restaurant on its path, so empty tables vanish
+                groups[node].pop(i)
                 new_path = sample_from_node(
                     node,
-                    i=i,
-                    x_obs=None,
+                    x_obs=x[node][i],
                     cache=None,
                     nodes=nodes,
                     groups=groups,
@@ -395,14 +408,13 @@ def run_sampler(
                     tables_to_atoms=tables_to_atoms,
                     parents_weights=parents_weights,
                     tables_to_path=tables_to_path,
-                    x=x,
                     model=model,
                 )
                 # update maps
                 for lvl in range(len(new_path)):
-                    tables_to_atoms[new_path[lvl]] = new_path[0][1]
+                    tables_to_atoms[new_path[lvl]] = hash(new_path[0])
                     tables_to_path[new_path[lvl]] = new_path[: lvl + 1]
-                groups[node][i] = new_path
+                groups[node].insert(i, new_path)
 
         # model-specific parameter updates
         model.update_atoms(groups, x, tables_to_atoms, atoms)
@@ -410,9 +422,9 @@ def run_sampler(
         model.update_kernel(groups, x, atoms, tables_to_atoms)
 
         update_parent_weights(parents_weights, groups, alpha, nodes)
-        update_concentration(nodes, groups, tables_to_atoms, alpha, a_0, b_0, sigma)
+        update_concentration(nodes, groups, alpha, a_0, b_0, sigma)
         if not freeze_sigma:
-            sigma = update_discount(nodes, groups, tables_to_atoms, alpha, sigma)
+            sigma = update_discount(nodes, groups, alpha)
 
         # record
         history["groups"].append({k: list(v) for k, v in groups.items()})

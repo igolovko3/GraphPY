@@ -5,11 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "GraphPY"
 version = "0.1.0"
-description = "Hierarchical (Pitman–Yor/DP) sampler with pluggable observation models (1D/2D)."
+description = "Hierarchical (Pitman–Yor/DP) sampler with pluggable observation models."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "Your Name" }]
+authors = [{ name = "Ivan Golovko", email = "ivan.golovko@phd.unibocconi.it" }]
 dependencies = [
   "numpy>=1.23",
   "scipy>=1.10",
