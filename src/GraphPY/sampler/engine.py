@@ -252,7 +252,15 @@ def update_parent_weights(
 ) -> None:
     # Note: dependence on alpha is deprecated
     for node in list(parents_weights.keys()):
-        tables_by_parents = [g[-2][0] for g in set(groups[node])]
+        lvl = nodes[node]["lvl"]
+        # every table at the node, including tables opened only by descendants' tables
+        tables = {
+            g[: lvl + 1]
+            for v in [node, *nodes[node]["desc"]]
+            for g in groups[v]
+            if len(g) > lvl and g[lvl][0] == node
+        }
+        tables_by_parents = [t[lvl - 1][0] for t in tables]
         counts = dict(zip(*np.unique(tables_by_parents, return_counts=True), strict=True))
         # TODO: re-write parameter
         weights = np.array([1 + counts.get(parent, 0) for parent in nodes[node]["par"]])
@@ -334,6 +342,62 @@ def update_discount(nodes: Nodes, groups: Groups, alpha: Alpha) -> float:
 # ---------------- main engine ----------------
 
 
+def gibbs_sweep(
+    *,
+    nodes: Nodes,
+    x: XData,
+    model: ObservationModel,
+    groups: Groups,
+    atoms: Atoms,
+    tables_to_atoms: TablesToAtoms,
+    tables_to_path: TablesToPath,
+    alpha: Alpha,
+    sigma: float,
+    parents_weights: ParentsWeights,
+    a_0: float,
+    b_0: float,
+    freeze_sigma: bool = False,
+) -> float:
+    """
+    One sweep of the sampler; updates the state in place and returns the (new) discount.
+    """
+    # table assignments
+    for node in nodes:
+        for i in range(len(x[node])):
+            # remove obs i from every restaurant on its path, so empty tables vanish
+            groups[node].pop(i)
+            new_path = sample_from_node(
+                node,
+                x_obs=x[node][i],
+                cache=None,
+                nodes=nodes,
+                groups=groups,
+                alpha=alpha,
+                sigma=sigma,
+                atoms=atoms,
+                tables_to_atoms=tables_to_atoms,
+                parents_weights=parents_weights,
+                tables_to_path=tables_to_path,
+                model=model,
+            )
+            # update maps
+            for lvl in range(len(new_path)):
+                tables_to_atoms[new_path[lvl]] = hash(new_path[0])
+                tables_to_path[new_path[lvl]] = new_path[: lvl + 1]
+            groups[node].insert(i, new_path)
+
+    # model-specific parameter updates
+    model.update_atoms(groups, x, tables_to_atoms, atoms)
+    model.update_base_distribution(groups, x, atoms, tables_to_atoms)
+    model.update_kernel(groups, x, atoms, tables_to_atoms)
+
+    update_parent_weights(parents_weights, groups, alpha, nodes)
+    update_concentration(nodes, groups, alpha, a_0, b_0, sigma)
+    if not freeze_sigma:
+        sigma = update_discount(nodes, groups, alpha)
+    return sigma
+
+
 def run_sampler(
     *,
     nodes: Nodes,
@@ -355,7 +419,6 @@ def run_sampler(
     assert list(nodes) == list(x), "nodes and x must have the same keys in the same order"
     assert group_init_mode in ["diffuse", "concentrated", "random"]
 
-    n_obs = {node: len(x[node]) for node in nodes}
     if burn_in is None:
         burn_in = int(0.3 * n_iter)
     assert burn_in < n_iter
@@ -391,40 +454,21 @@ def run_sampler(
 
     it_range = tqdm(range(n_iter), desc="Processing", unit="iter") if progress else range(n_iter)
     for _ in it_range:
-        # table assignments
-        for node in nodes:
-            for i in range(n_obs[node]):
-                # remove obs i from every restaurant on its path, so empty tables vanish
-                groups[node].pop(i)
-                new_path = sample_from_node(
-                    node,
-                    x_obs=x[node][i],
-                    cache=None,
-                    nodes=nodes,
-                    groups=groups,
-                    alpha=alpha,
-                    sigma=sigma,
-                    atoms=atoms,
-                    tables_to_atoms=tables_to_atoms,
-                    parents_weights=parents_weights,
-                    tables_to_path=tables_to_path,
-                    model=model,
-                )
-                # update maps
-                for lvl in range(len(new_path)):
-                    tables_to_atoms[new_path[lvl]] = hash(new_path[0])
-                    tables_to_path[new_path[lvl]] = new_path[: lvl + 1]
-                groups[node].insert(i, new_path)
-
-        # model-specific parameter updates
-        model.update_atoms(groups, x, tables_to_atoms, atoms)
-        model.update_base_distribution(groups, x, atoms, tables_to_atoms)
-        model.update_kernel(groups, x, atoms, tables_to_atoms)
-
-        update_parent_weights(parents_weights, groups, alpha, nodes)
-        update_concentration(nodes, groups, alpha, a_0, b_0, sigma)
-        if not freeze_sigma:
-            sigma = update_discount(nodes, groups, alpha)
+        sigma = gibbs_sweep(
+            nodes=nodes,
+            x=x,
+            model=model,
+            groups=groups,
+            atoms=atoms,
+            tables_to_atoms=tables_to_atoms,
+            tables_to_path=tables_to_path,
+            alpha=alpha,
+            sigma=sigma,
+            parents_weights=parents_weights,
+            a_0=a_0,
+            b_0=b_0,
+            freeze_sigma=freeze_sigma,
+        )
 
         # record
         history["groups"].append({k: list(v) for k, v in groups.items()})
