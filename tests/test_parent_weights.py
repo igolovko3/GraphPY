@@ -1,7 +1,7 @@
 import numpy as np
 
-import GraphPY.sampler.engine as engine
-from GraphPY.sampler.engine import update_parent_weights
+import GraphPY.sampler.reference as reference
+from GraphPY.sampler.reference import update_parent_weights
 from GraphPY.types import Nodes
 
 NODES: Nodes = {
@@ -21,7 +21,7 @@ def dirichlet_params(monkeypatch, groups):
             seen["weights"] = np.asarray(weights)
             return [np.asarray(weights) / np.sum(weights)]
 
-    monkeypatch.setattr(engine, "dirichlet", FakeDirichlet)
+    monkeypatch.setattr(reference, "dirichlet", FakeDirichlet)
     update_parent_weights({"C": [0.5, 0.5]}, groups, {}, NODES)
     return seen["weights"]
 
