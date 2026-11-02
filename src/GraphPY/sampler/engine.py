@@ -82,6 +82,37 @@ def _topological_order(nodes: Nodes) -> list[NodeId]:
     return order
 
 
+def _node_predictives(
+    A: np.ndarray,
+    lik_root: Any,
+    new_w: np.ndarray,
+    denom: np.ndarray,
+    topo: list[int],
+    parents: list[list[int]],
+    weights: list[np.ndarray],
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Predictive of every node for one or several new observations (columns of A), and the
+    likelihood of a new table at each node (the parents' predictive, or G0's at a root).
+
+    A[j]: sum over node j's tables of (n_t - sigma) f(x | atom of t);
+    new_w[j] = alpha_j + sigma K_j; denom[j] = alpha_j + n_j.
+    Works for A of shape (n_nodes,) or (n_nodes, M).
+    """
+    pred = np.zeros_like(A, dtype=float)
+    like_new = np.zeros_like(A, dtype=float)
+    for j in topo:
+        par = parents[j]
+        if not par:
+            like_new[j] = lik_root
+        elif len(par) == 1:
+            like_new[j] = pred[par[0]]
+        else:
+            like_new[j] = weights[j] @ pred[par]
+        pred[j] = (A[j] + new_w[j] * like_new[j]) / denom[j]
+    return pred, like_new
+
+
 class CRFState:
     """
     Chinese restaurant franchise state over a DAG.
@@ -133,6 +164,7 @@ class CRFState:
         self.LL = np.zeros((self.N, 0))  # log p(x_n | atom of cluster k)
 
         self.tables_to_atoms: TablesToAtoms = {}  # every table key ever created -> atom label
+        self.track_likelihoods = True  # keep self.LL up to date (needed for seating updates)
 
     # ---------------- construction / export ----------------
 
@@ -145,9 +177,15 @@ class CRFState:
         groups: Groups,
         atoms: Atoms,
         tables_to_atoms: TablesToAtoms | None = None,
+        track_likelihoods: bool = True,
     ) -> CRFState:
-        """Build the state from reference-format seating paths and atoms (keyed by label)."""
+        """
+        Build the state from reference-format seating paths and atoms (keyed by label).
+        `track_likelihoods=False` skips the observation-by-atom likelihood matrix, which only
+        the seating updates need (e.g. when the state is used to evaluate predictive densities).
+        """
         st = cls(nodes, x, model)
+        st.track_likelihoods = track_likelihoods
         table_of: dict[TableKey, int] = {}
         g = 0
         for v in st.node_ids:
@@ -214,7 +252,8 @@ class CRFState:
         k = self.free_slots.pop()
         self.atoms[k] = atom
         self.slot_label[k] = label  # set by _new_table for new root tables when None
-        self.LL[:, k] = self.model.log_like_matrix(self.X, self.atoms[k : k + 1])[:, 0]
+        if self.track_likelihoods:
+            self.LL[:, k] = self.model.log_like_matrix(self.X, self.atoms[k : k + 1])[:, 0]
         return k
 
     def _new_table(self, j: int, parent: int, k: int, key: TableKey | None = None) -> int:
@@ -297,18 +336,9 @@ class CRFState:
         W = self.C - sigma * self.T  # sum over a node's tables of cluster k of (n_t - sigma)
         A = W @ lik
         new_w = alpha + sigma * self.k_node  # weight of a new table, per node
-        denom = alpha + self.n_node
-        pred = np.zeros(len(self.node_ids))
-        like_new = np.zeros(len(self.node_ids))
-        for j in self.topo:
-            par = self.parents[j]
-            if not par:
-                like_new[j] = lik_root
-            elif len(par) == 1:
-                like_new[j] = pred[par[0]]
-            else:
-                like_new[j] = float(weights[j] @ pred[par])
-            pred[j] = (A[j] + new_w[j] * like_new[j]) / denom[j]
+        pred, like_new = _node_predictives(
+            A, lik_root, new_w, alpha + self.n_node, self.topo, self.parents, weights
+        )
 
         # walk up from the observation's node while new tables are opened
         j = int(self.obs_node[g])
@@ -340,6 +370,38 @@ class CRFState:
             top = t
         self._add_customer(top)
         self.obs_table[g] = top
+
+    # ---------------- predictive density ----------------
+
+    def predictive_density(
+        self, grid: np.ndarray, alpha: np.ndarray, sigma: float, weights: list[np.ndarray]
+    ) -> np.ndarray:
+        """
+        Density of a new observation at every node, given the current state, at each grid point:
+        array (n_nodes, M). A new observation at node j joins table t with weight (n_t - sigma)
+        and its atom's kernel, or a new table, which draws from the parents' predictive (weighted
+        by the parent weights) and from G0 at a root. Uses the model's current hyperparameters.
+        """
+        live = self.live_slots()
+        G = np.asarray(grid, dtype=float)
+        log_root = self.model.log_like_new_root_all(G)
+        if len(live):
+            LL = self.model.log_like_matrix(G, self.atoms[live])
+            m = np.maximum(LL.max(axis=1), log_root)
+            A = (self.C - sigma * self.T)[:, live] @ np.exp(LL - m[:, None]).T
+        else:
+            m = log_root
+            A = np.zeros((len(self.node_ids), len(log_root)))
+        pred, _ = _node_predictives(
+            A,
+            np.exp(log_root - m),
+            alpha + sigma * self.k_node,
+            alpha + self.n_node,
+            self.topo,
+            self.parents,
+            weights,
+        )
+        return np.asarray(pred * np.exp(m)[None, :])
 
     # ---------------- hyperparameter updates ----------------
 
