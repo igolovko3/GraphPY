@@ -125,11 +125,13 @@ def likelihood_observation(
     # multiply by existing-table likelihood terms
     for t in range(n_tables):
         at_label = tables_to_atoms[(node, int(tables[t]))]
-        p_old[t] *= float(model.like_existing(np.asarray([x_obs]).ravel(), atoms[at_label]))
+        p_old[t] *= np.asarray(
+            model.like_existing(np.asarray([x_obs]).ravel(), atoms[at_label])
+        ).item()
 
     likelihood_parents = None
     if lvl == 0:
-        likelihood_new = float(model.like_new_root(np.asarray([x_obs]).ravel()))
+        likelihood_new = np.asarray(model.like_new_root(np.asarray([x_obs]).ravel())).item()
     else:
         parents = nodes[node]["par"]
         if len(parents) == 1:
@@ -198,7 +200,9 @@ def sample_from_node(
 
     for t in range(n_tables):
         at_label = tables_to_atoms[(node, int(tables[t]))]
-        p_old[t] *= float(model.like_existing(np.asarray([x_obs]).ravel(), atoms[at_label]))
+        p_old[t] *= np.asarray(
+            model.like_existing(np.asarray([x_obs]).ravel(), atoms[at_label])
+        ).item()
 
     likelihood_node, likelihood_parents, likelihood_new = likelihood_observation(
         node,

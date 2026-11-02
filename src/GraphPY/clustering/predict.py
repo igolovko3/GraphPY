@@ -31,9 +31,9 @@ def predicted_clusters(
     psm = comp_psm(np.array(partitions))
     pred_part = minVI(psm)["cl"]
 
-    atoms = []
+    atoms_by_node = []
     for node in nodes:
-        atoms.append(
+        atoms_by_node.append(
             np.array(
                 list(
                     itertools.chain(
@@ -50,7 +50,7 @@ def predicted_clusters(
                 )
             ).T
         )
-    atoms = np.concatenate(atoms)
+    atoms = np.concatenate(atoms_by_node)
     clusters = np.unique(pred_part)
     atoms_cl = dict(
         zip(
@@ -94,7 +94,7 @@ def predicted_clusters_2D(
     psm = comp_psm(np.array(partitions))
     pred_part = minVI(psm)["cl"]
 
-    atoms = []
+    atoms_by_node = []
     for node in nodes:
         temp1 = [
             [
@@ -106,8 +106,8 @@ def predicted_clusters_2D(
 
         temp2 = np.array(list(itertools.chain(temp1)))
         temp2 = np.transpose(temp2, (1, 0, 2))
-        atoms.append(temp2)
-    atoms = np.concatenate(atoms)
+        atoms_by_node.append(temp2)
+    atoms = np.concatenate(atoms_by_node)
     clusters = np.unique(pred_part)
     atoms_cl = dict(
         zip(
