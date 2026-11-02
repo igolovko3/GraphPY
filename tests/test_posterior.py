@@ -43,3 +43,16 @@ def test_posterior_predictive_basic():
 
 if __name__ == "__main__":
     tiny_run()
+
+
+def test_resolve_grid_x_without_grid_or_truth():
+    # regression: sigma_x was read from res["history"], which has no such key
+    from GraphPY.posterior.plotting import _resolve_grid_x
+    from GraphPY.sampler.samplers import GPYSamplerGaussian1D
+
+    nodes = {"r": {"lvl": 0, "par": [], "desc": ["c"]}, "c": {"lvl": 1, "par": ["r"], "desc": []}}
+    x = {"r": [0.0, 1.0, -1.0], "c": [3.0, 2.5]}
+    res = GPYSamplerGaussian1D(nodes, x, n_iter=10, burn_in=2, progress=False)
+    grid = _resolve_grid_x(None, None, x, res, num=50)
+    assert len(grid) == 50
+    assert grid.min() < -1.0 and grid.max() > 3.0
