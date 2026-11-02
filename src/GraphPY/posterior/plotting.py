@@ -1,4 +1,3 @@
-import itertools
 from typing import Any
 
 import numpy as np
@@ -14,8 +13,8 @@ from GraphPY.types import NodeId, Nodes, XData
 
 
 def plot_posterior1D(
-    nodes: dict[str, dict[str, Any]],
-    x: dict[str, list[float]],
+    nodes: Nodes,
+    x: XData,
     res: dict[str, Any],
     f_post: dict[str, pd.DataFrame],
     f_true: dict[str, pd.DataFrame] | None = None,
@@ -206,7 +205,7 @@ def plot_posterior1D(
 def _resolve_grid_x(
     grid_x: np.ndarray | None,
     f_true: dict[str, pd.DataFrame] | None,
-    x: dict[str, list[float]],
+    x: XData,
     res: dict[str, Any],
     num: int = 500,
 ) -> np.ndarray:
@@ -225,11 +224,11 @@ def _resolve_grid_x(
                 grid_x = df["x"].to_numpy()
                 return grid_x
 
-    history = res["history"]
+    # sigma_x is a model parameter: its trace lives in the model, not in the sampler history
     burn_in = res["params"]["burn_in"]
-    sigma_x = float(np.mean(history["sigma_x"][burn_in:]))
+    sigma_x = float(np.mean(res["model"].param_history["sigma_x"][burn_in:]))
 
-    x_all = list(itertools.chain(*x.values()))
+    x_all = np.concatenate([np.asarray(v, dtype=float).ravel() for v in x.values()])
     x_min = np.min(x_all) - sigma_x
     x_max = np.max(x_all) + sigma_x
     grid_x = np.linspace(x_min, x_max, num=num)
@@ -262,8 +261,8 @@ def plot_with_computed_post1D(
 
 
 def plot_clusters_2D(
-    nodes: dict[str, dict[str, Any]],
-    x: dict[str, list[np.ndarray]],
+    nodes: Nodes,
+    x: XData,
     res: dict[str, Any],
     *,
     grid_mode: bool = False,

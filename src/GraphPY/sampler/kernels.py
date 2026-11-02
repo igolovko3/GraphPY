@@ -8,6 +8,27 @@ from scipy.stats import invgamma, invwishart, multivariate_normal, norm
 
 from GraphPY.types import Atoms, Groups, TablesToAtoms, XData
 
+LOG_2PI = float(np.log(2 * np.pi))
+
+
+def _members_by_atom(
+    groups: Groups, x: XData, tables_to_atoms: TablesToAtoms
+) -> tuple[list[int], np.ndarray, np.ndarray]:
+    # atom labels (in order of first appearance), observations, and atom index of each observation
+    all_tables = [obs for group in groups.values() for obs in group]
+    labels = list(dict.fromkeys(tables_to_atoms[g[0]] for g in all_tables))
+    index = {lab: k for k, lab in enumerate(labels)}
+    X = np.asarray([xi for arr in x.values() for xi in arr], dtype=float)
+    z = np.array([index[tables_to_atoms[g[0]]] for g in all_tables], dtype=int)
+    return labels, X, z
+
+
+def _sums_by_atom(X: np.ndarray, z: np.ndarray, n_atoms: int) -> tuple[np.ndarray, np.ndarray]:
+    n_k = np.bincount(z, minlength=n_atoms).astype(float)
+    sum_k = np.zeros((n_atoms,) + X.shape[1:])
+    np.add.at(sum_k, z, X)
+    return n_k, sum_k
+
 
 class ObservationModel(ABC):
     """
@@ -52,6 +73,34 @@ class ObservationModel(ABC):
     def update_base_distribution(
         self, groups: Groups, x: XData, atoms: Atoms, tables_to_atoms: TablesToAtoms, **kwargs: Any
     ) -> None:
+        pass
+
+    # ---- array-based interface (used by the engine) ----
+    # X: observations stacked along axis 0; atoms: atom values stacked along axis 0
+
+    # log p(X[n] | atoms[k]) for every pair: shape (N, K)
+    @abstractmethod
+    def log_like_matrix(self, X: np.ndarray, atoms: np.ndarray) -> np.ndarray:
+        pass
+
+    # log of the new-table prior predictive at a ROOT for every observation: shape (N,)
+    @abstractmethod
+    def log_like_new_root_all(self, X: np.ndarray) -> np.ndarray:
+        pass
+
+    # draw atoms from their conjugate posteriors given per-atom counts and sums of observations
+    @abstractmethod
+    def sample_atoms(self, n_k: np.ndarray, sum_k: np.ndarray) -> np.ndarray:
+        pass
+
+    # update base-distribution hyperparameters given the distinct atoms
+    @abstractmethod
+    def update_base_from_atoms(self, unique_atoms: np.ndarray) -> None:
+        pass
+
+    # update kernel hyperparameters given residuals x - atom of every observation
+    @abstractmethod
+    def update_kernel_from_resid(self, resid: np.ndarray) -> None:
         pass
 
     def posterior_parameters(self, res: dict[str, Any]) -> dict[str, Any]:
@@ -142,16 +191,27 @@ class Gaussian1DModel(ObservationModel):
     def update_atoms(
         self, groups: Groups, x: XData, tables_to_atoms: TablesToAtoms, atoms: Atoms
     ) -> None:
-        all_tables = [obs for group in groups.values() for obs in group]
-        all_data = [xi for arr in x.values() for xi in arr]
-        curr_atoms = {tables_to_atoms[g[0]] for g in all_tables}
-        for at in curr_atoms:
-            members = [
-                all_data[i] for i in range(len(all_data)) if tables_to_atoms[all_tables[i][0]] == at
-            ]
-            std = 1.0 / np.sqrt(1.0 / self.sigma_phi**2 + len(members) / self.sigma_x**2)
-            mean = (sum(members) / self.sigma_x**2 + self.mu_phi / self.sigma_phi**2) * std**2
-            atoms[at] = float(np.random.normal(mean, std))
+        labels, X, z = _members_by_atom(groups, x, tables_to_atoms)
+        new_atoms = self.sample_atoms(*_sums_by_atom(X, z, len(labels)))
+        for lab, atom in zip(labels, new_atoms, strict=True):
+            atoms[lab] = float(atom)
+
+    # ---- array-based interface ----
+    def log_like_matrix(self, X: np.ndarray, atoms: np.ndarray) -> np.ndarray:
+        d = (np.asarray(X, dtype=float)[:, None] - np.asarray(atoms, dtype=float)[None, :]) / (
+            self.sigma_x
+        )
+        return np.asarray(-0.5 * d**2 - np.log(self.sigma_x) - 0.5 * LOG_2PI)
+
+    def log_like_new_root_all(self, X: np.ndarray) -> np.ndarray:
+        s = np.sqrt(self.sigma_phi**2 + self.sigma_x**2)
+        d = (np.asarray(X, dtype=float) - self.mu_phi) / s
+        return np.asarray(-0.5 * d**2 - np.log(s) - 0.5 * LOG_2PI)
+
+    def sample_atoms(self, n_k: np.ndarray, sum_k: np.ndarray) -> np.ndarray:
+        std = 1.0 / np.sqrt(1.0 / self.sigma_phi**2 + n_k / self.sigma_x**2)
+        mean = (sum_k / self.sigma_x**2 + self.mu_phi / self.sigma_phi**2) * std**2
+        return np.asarray(np.random.normal(mean, std))
 
     def update_kernel(
         self, groups: Groups, x: XData, atoms: Atoms, tables_to_atoms: TablesToAtoms, **kwargs: Any
@@ -159,9 +219,11 @@ class Gaussian1DModel(ObservationModel):
         all_tables = [obs for group in groups.values() for obs in group]
         all_data = np.array([xi for arr in x.values() for xi in arr], dtype=float)
         all_atoms = np.array([atoms[tables_to_atoms[g[0]]] for g in all_tables], dtype=float)
+        self.update_kernel_from_resid(all_data - all_atoms)
 
-        alpha_post = self._alpha_kernel + len(all_data) / 2
-        beta_post = self._beta_kernel + np.sum((all_data - all_atoms) ** 2) / 2
+    def update_kernel_from_resid(self, resid: np.ndarray) -> None:
+        alpha_post = self._alpha_kernel + len(resid) / 2
+        beta_post = self._beta_kernel + np.sum(resid**2) / 2
         self.sigma_x = np.sqrt(invgamma.rvs(a=alpha_post, scale=beta_post))
         self.param_history["sigma_x"].append(self.sigma_x)
 
@@ -170,6 +232,10 @@ class Gaussian1DModel(ObservationModel):
     ) -> None:
         unique_tables = set([obs[0] for group in groups.values() for obs in group])
         unique_atoms = np.array([atoms[tables_to_atoms[g]] for g in unique_tables], dtype=float)
+        self.update_base_from_atoms(unique_atoms)
+
+    def update_base_from_atoms(self, unique_atoms: np.ndarray) -> None:
+        unique_atoms = np.asarray(unique_atoms, dtype=float)
         mean_atoms = np.mean(unique_atoms)
         n_atoms = len(unique_atoms)
 
@@ -191,7 +257,6 @@ class Gaussian1DModel(ObservationModel):
         self.param_history["mu_phi"].append(self.mu_phi)
 
 
-# ---------- 2D Gaussian ----------
 class MultivariateGaussianModel(ObservationModel):
     def __init__(
         self,
@@ -277,23 +342,50 @@ class MultivariateGaussianModel(ObservationModel):
     def update_atoms(
         self, groups: Groups, x: XData, tables_to_atoms: TablesToAtoms, atoms: Atoms
     ) -> None:
-        all_tables = [obs for group in groups.values() for obs in group]
-        all_data = [xi for arr in x.values() for xi in arr]  # each xi is (2,)
-        curr_atoms = {tables_to_atoms[g[0]] for g in all_tables}
-        for at in curr_atoms:
-            members = [
-                np.asarray(all_data[i])
-                for i in range(len(all_data))
-                if tables_to_atoms[all_tables[i][0]] == at
-            ]
-            n = len(members)
-            if n == 0:
-                continue
-            Sigma_post = np.linalg.inv(self._Sigma_phi_inv + n * self._Sigma_x_inv)
-            mu_post = Sigma_post @ (
-                self._Sigma_x_inv @ np.sum(members, axis=0) + self._Sigma_phi_inv @ self.mu_phi
-            )
-            atoms[at] = np.random.multivariate_normal(mu_post, Sigma_post)
+        labels, X, z = _members_by_atom(groups, x, tables_to_atoms)
+        new_atoms = self.sample_atoms(*_sums_by_atom(X, z, len(labels)))
+        for lab, atom in zip(labels, new_atoms, strict=True):
+            atoms[lab] = atom
+
+    # ---- array-based interface ----
+    def _chol_inv_x(self) -> tuple[np.ndarray, float]:
+        # inverse Cholesky factor and log-determinant of Sigma_x, recomputed only when replaced
+        if getattr(self, "_chol_x_src", None) is not self.Sigma_x:
+            self._chol_x_cache = self._chol_inv(self.Sigma_x)
+            self._chol_x_src = self.Sigma_x
+        return self._chol_x_cache
+
+    @staticmethod
+    def _chol_inv(cov: np.ndarray) -> tuple[np.ndarray, float]:
+        chol = np.linalg.cholesky(cov)
+        return np.linalg.inv(chol), float(2.0 * np.sum(np.log(np.diag(chol))))
+
+    @staticmethod
+    def _logpdf_rows(diff: np.ndarray, chol_inv: np.ndarray, log_det: float) -> np.ndarray:
+        # log N(diff; 0, Sigma) along the last axis, with Sigma^-1 = chol_inv^T chol_inv
+        sol = diff @ chol_inv.T
+        d = chol_inv.shape[0]
+        return np.asarray(-0.5 * (np.sum(sol**2, axis=-1) + log_det + d * LOG_2PI))
+
+    def log_like_matrix(self, X: np.ndarray, atoms: np.ndarray) -> np.ndarray:
+        X = np.asarray(X, dtype=float).reshape(-1, self._n_dim)
+        atoms = np.asarray(atoms, dtype=float).reshape(-1, self._n_dim)
+        return self._logpdf_rows(X[:, None, :] - atoms[None, :, :], *self._chol_inv_x())
+
+    def log_like_new_root_all(self, X: np.ndarray) -> np.ndarray:
+        X = np.asarray(X, dtype=float).reshape(-1, self._n_dim)
+        return self._logpdf_rows(
+            X - np.asarray(self.mu_phi), *self._chol_inv(self.Sigma_phi + self.Sigma_x)
+        )
+
+    def sample_atoms(self, n_k: np.ndarray, sum_k: np.ndarray) -> np.ndarray:
+        out = np.empty((len(n_k), self._n_dim))
+        prior_term = self._Sigma_phi_inv @ self.mu_phi
+        for k in range(len(n_k)):
+            Sigma_post = np.linalg.inv(self._Sigma_phi_inv + n_k[k] * self._Sigma_x_inv)
+            mu_post = Sigma_post @ (self._Sigma_x_inv @ sum_k[k] + prior_term)
+            out[k] = np.random.multivariate_normal(mu_post, Sigma_post)
+        return out
 
     def update_kernel(
         self, groups: Groups, x: XData, atoms: Atoms, tables_to_atoms: TablesToAtoms, **kwargs: Any
@@ -303,10 +395,11 @@ class MultivariateGaussianModel(ObservationModel):
         all_atoms = np.vstack(
             [np.asarray(atoms[tables_to_atoms[g[0]]]) for g in all_tables]
         )  # (N,2)
-        resid = all_data - all_atoms
-        n_obs = len(resid)
+        self.update_kernel_from_resid(all_data - all_atoms)
 
-        nu_post = self._nu_kernel + n_obs
+    def update_kernel_from_resid(self, resid: np.ndarray) -> None:
+        resid = np.asarray(resid, dtype=float).reshape(-1, self._n_dim)
+        nu_post = self._nu_kernel + len(resid)
         psi_post = self._psi_kernel + resid.T @ resid
 
         self.Sigma_x = invwishart.rvs(df=nu_post, scale=psi_post)
@@ -319,6 +412,10 @@ class MultivariateGaussianModel(ObservationModel):
     ) -> None:
         unique_tables = set([obs[0] for group in groups.values() for obs in group])
         unique_atoms = np.array([atoms[tables_to_atoms[g]] for g in unique_tables], dtype=float)
+        self.update_base_from_atoms(unique_atoms)
+
+    def update_base_from_atoms(self, unique_atoms: np.ndarray) -> None:
+        unique_atoms = np.asarray(unique_atoms, dtype=float).reshape(-1, self._n_dim)
         mean_atoms = np.mean(unique_atoms, axis=0)
         n_atoms = unique_atoms.shape[0]
 
